@@ -1,0 +1,327 @@
+* {
+  box-sizing: border-box;
+}
+
+:root {
+  --bg-color: #121212;
+  --panel-bg: #1e1e1e;
+  --card-bg: #2b2b2b;
+  --border-color: #3d3d3d;
+  --primary: #224A25;
+  --primary-hover: #2E6332;
+  --secondary: #444;
+  --secondary-hover: #555;
+  --text-main: #eeeeee;
+  --text-muted: #aaaaaa;
+  
+  /* Lidar Marker Configuration */
+  --lidar-fill-color: #ffffff;
+  --lidar-stroke-color: #ffffff;
+  --lidar-text-color: #dddddd;
+  --lidar-font-size: 20;
+  --lidar-font-family: 'Outfit';
+  --lidar-text-spacing: 25;
+  --lidar-visual-scale: 1.0;
+  --lidar-base-size: 20;
+  /* --lidar-circle-color: #ffffff; */
+  /* --lidar-circle-stroke: 1.2; */
+  --lidar-inner-color: #F7374F;
+}
+
+
+html, body, #root {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', 'Roboto', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+}
+
+.App {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+}
+
+.App-header {
+  background-color: var(--panel-bg);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  padding: 0 20px;
+  height: 60px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.brand {
+  font-size: 1.2rem;
+  font-weight: bold;
+  margin-right: 40px;
+  color: #4CAF50;
+}
+
+.tab-bar {
+  display: flex;
+  height: 100%;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  padding: 0 20px;
+  font-size: 1rem;
+  cursor: pointer;
+  height: 100%;
+  transition: all 0.2s;
+  border-bottom: 3px solid transparent;
+}
+
+.tab-btn:hover {
+  color: var(--text-main);
+  background: rgba(255,255,255,0.05);
+}
+
+.tab-btn.active {
+  color: var(--text-main);
+  border-bottom: 3px solid var(--primary);
+}
+
+.App-main {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  width: 100%;
+}
+
+.App-main > div {
+  flex: 1;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+/* Home Component */
+.home-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+}
+
+.center-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.title {
+  font-size: 3rem;
+  font-weight: bold;
+  margin-bottom: 30px;
+}
+
+.settings-panel {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 15px;
+  padding: 24px;
+  width: 100%;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-group label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.input-group input, .input-group select {
+  background-color: var(--panel-bg);
+  border: 1px solid #555;
+  border-radius: 5px;
+  padding: 10px;
+  color: white;
+  font-size: 1rem;
+  outline: none;
+  transition: border 0.2s;
+}
+
+.input-group input:focus, .input-group select:focus {
+  border-color: #4CAF50;
+}
+
+.primary-btn {
+  background-color: var(--primary);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+.primary-btn:hover { background-color: var(--primary-hover); }
+
+.secondary-btn {
+  background-color: var(--secondary);
+  color: white;
+  border: none;
+  border-radius: 5px;
+  padding: 12px;
+  font-size: 1rem;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: background 0.2s;
+}
+.secondary-btn:hover { background-color: var(--secondary-hover); }
+
+.mt-4 { margin-top: 16px; }
+
+/* Editor Layout */
+.editor-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+.viewport {
+  flex: 1;
+  background-color: #1c1c1c;
+  position: relative;
+  overflow: hidden;
+}
+
+.toolbar {
+  position: absolute;
+  z-index: 1000;
+  display: flex;
+  gap: 15px;
+  background: rgba(43, 43, 43, 0.8);
+  padding: 10px 15px;
+  border-radius: 8px;
+  backdrop-filter: blur(5px);
+}
+
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.9rem;
+}
+
+.config-panel {
+  width: 350px;
+  background-color: var(--card-bg);
+  border-left: 1px solid var(--border-color);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+.panel-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.panel-title {
+  font-size: 1.1rem;
+  font-weight: bold;
+  border-bottom: 1px solid #444;
+  padding-bottom: 5px;
+  margin-bottom: 5px;
+}
+
+.sensor-list {
+  background: var(--panel-bg);
+  border: 1px solid #444;
+  border-radius: 5px;
+  height: 120px;
+  overflow-y: auto;
+}
+
+.sensor-item {
+  padding: 8px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #333;
+}
+.sensor-item:hover { background: rgba(255,255,255,0.05); }
+.sensor-item.selected { background: rgba(76, 175, 80, 0.2); border-left: 3px solid #4CAF50; }
+
+.row-group {
+  display: flex;
+  gap: 10px;
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.btn-blue { background: #223A5E; color: white; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; flex: 1;}
+.btn-red { background: #662222; color: white; padding: 6px 12px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold;}
+.btn-teal { background: teal; color: white; padding: 10px; border-radius: 4px; border: none; cursor: pointer; font-weight: bold; width: 100%;}
+
+/* Settings / Generation panel overrides */
+.settings-panel {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+}
+
+.settings-panel table {
+  width: 100%;
+  table-layout: auto;
+}
+
+.settings-panel table input[type="number"],
+.settings-panel table select {
+  width: 100%;
+  min-width: 40px;
+  max-width: 90px;
+  box-sizing: border-box;
+}
+
+/* Dark scrollbars */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #1a1a1a; }
+::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #666; }
+

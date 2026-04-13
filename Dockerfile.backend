@@ -1,0 +1,25 @@
+FROM python:3.10-slim
+
+WORKDIR /app
+
+# Install system dependencies necessary for shapely/ezdxf if any
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy backend requirements
+COPY requirements.txt .
+
+# Install dependencies and a production WSGI server
+RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir gunicorn
+
+# Copy backend source files
+COPY core.py .
+COPY app.py .
+COPY SafetyStudio/assets ./SafetyStudio/assets
+
+EXPOSE 5000
+
+# Run using Gunicorn (Assuming app is defined as `app` in app.py)
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "app:app"]

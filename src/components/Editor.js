@@ -1,0 +1,424 @@
+import React, { useState, useEffect } from 'react';
+import { Layer, Line, Circle, Group } from 'react-konva';
+import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, PencilLine, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Anchor } from 'lucide-react';
+import axios from 'axios';
+import { parseWktToKonva } from '../utils/wktParser';
+import GridCanvas, { SCALE_M } from './GridCanvas';
+import LidarMarker from './LidarMarker';
+import CADSketcher from './CADSketcher';
+import ConstraintList from './ConstraintList';
+import { sketchesToWkt } from '../utils/cadToWkt';
+
+const Editor = ({ globals, setActiveTab }) => {
+  const { 
+    geometry, setGeometry, 
+    sensors, setSensors, 
+    cadData, setCadFieldSafe,
+    undo, pushToHistory,
+    selectedSensorIndex, setSelectedSensorIndex,
+    activeTool, setActiveTool
+  } = globals;
+  const [showFootPrint, setShowFootPrint] = useState(true);
+  const [showL1, setShowL1]   = useState(true);
+  const [showL2, setShowL2]   = useState(true);
+  const [isSketchingMode, setIsSketchingMode] = useState(false);
+  const [formData, setFormData] = useState({
+    name: 'New Sensor', x: 0, y: 0, mount: 0, fov: 270, r: 10, dia: 150, flipped: false
+  });
+  const [targetLayer, setTargetLayer] = useState('FootPrint');
+  const [toolbarPos, setToolbarPos] = useState({ x: 10, y: 40 });
+  const [isDragToolbar, setIsDragToolbar] = useState(false);
+  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+
+  useEffect(() => {
+    if (sensors && sensors.length > 0) {
+      if (selectedSensorIndex !== null && selectedSensorIndex < sensors.length) {
+        setFormData({ ...sensors[selectedSensorIndex] });
+      }
+    }
+  }, [selectedSensorIndex, sensors]);
+
+
+  const handleUpload = async (e, key) => {
+    if (!e.target.files[0]) return;
+    const file = e.target.files[0];
+    const fd   = new FormData();
+    fd.append('file', file);
+    try {
+      const res = await axios.post('/api/upload_dxf', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      setGeometry(prev => ({ ...prev, [key]: res.data.wkt }));
+    } catch (err) {
+      alert('Failed to upload DXF: ' + (err.response?.data?.error || err.message));
+    }
+  };
+
+  const handleClear       = (key) => setGeometry(prev => ({ ...prev, [key]: null }));
+  const handleSaveSensor  = () => { const u = [...sensors]; u[selectedSensorIndex] = { ...formData }; setSensors(u); };
+  const handleAddSensor   = () => {
+    const ns = { name: `Lidar${sensors.length + 1}`, model: sensors[0]?.model || 'Sick Nanoscan3Pro', x: 0, y: 0, mount: 0, fov: 270, r: 10, dia: 150, flipped: false };
+    setSensors([...sensors, ns]);
+    setSelectedSensorIndex(sensors.length);
+  };
+  const handleDeleteSensor = () => {
+    if (sensors.length <= 1) return;
+    setSensors(sensors.filter((_, i) => i !== selectedSensorIndex));
+    setSelectedSensorIndex(0);
+  };
+  
+  // --- Draggable Toolbar Handlers ---
+  const handleDragStart = (e) => {
+    if (e.target.closest('button') || e.target.closest('input')) return;
+    setIsDragToolbar(true);
+    setDragOffset({ x: e.clientX - toolbarPos.x, y: e.clientY - toolbarPos.y });
+  };
+
+  useEffect(() => {
+    const handleMove = (e) => {
+      if (!isDragToolbar) return;
+      setToolbarPos({ x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y });
+    };
+    const handleUp = () => setIsDragToolbar(false);
+    if (isDragToolbar) {
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleUp);
+    }
+    return () => {
+        window.removeEventListener('mousemove', handleMove);
+        window.removeEventListener('mouseup', handleUp);
+    };
+  }, [isDragToolbar, dragOffset]);
+
+  const parsedFP = showFootPrint && geometry.FootPrint ? parseWktToKonva(geometry.FootPrint) : [];
+  const parsedL1 = showL1 && geometry.Load1 ? parseWktToKonva(geometry.Load1) : [];
+  const parsedL2 = showL2 && geometry.Load2 ? parseWktToKonva(geometry.Load2) : [];
+
+  const targetSketches = cadData[targetLayer]?.sketches || [];
+  const targetDimensions = cadData[targetLayer]?.dimensions || [];
+  const targetFixedPoints = cadData[targetLayer]?.fixedPoints || [];
+  const targetConstraints = cadData[targetLayer]?.constraints || [];
+
+  const handleClearSketch = () => {
+    pushToHistory();
+    setCadFieldSafe(targetLayer, null, 'sketches', []);
+    setCadFieldSafe(targetLayer, null, 'dimensions', []);
+    setCadFieldSafe(targetLayer, null, 'fixedPoints', []);
+    setCadFieldSafe(targetLayer, null, 'constraints', []);
+  };
+
+  const buildRefVertices = () => {
+    let refs = [];
+    const addLayer = (parsed, layerName) => {
+       parsed.forEach((poly, polyIdx) => {
+          for (let i = 0; i < poly.length; i += 2) {
+             refs.push({
+               x: poly[i], y: poly[i+1],
+               sketchId: `ref-${layerName}-${polyIdx}-${i}`,
+               part: 'point',
+               type: 'reference',
+               snapped: true
+             });
+          }
+       });
+    };
+    if (targetLayer !== 'FootPrint') addLayer(parsedFP, 'FootPrint');
+    if (targetLayer !== 'Load1') addLayer(parsedL1, 'Load1');
+    if (targetLayer !== 'Load2') addLayer(parsedL2, 'Load2');
+    return refs;
+  };
+  const referenceVertices = buildRefVertices();
+
+  useEffect(() => {
+    const handleEsc = (e) => {
+      // If the user is typing in a dimension overlay or any other input, 
+      // let the local handler deal with ESC.
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (e.key === 'Escape') {
+         if (isSketchingMode && targetSketches.length > 0) {
+            if (window.confirm("Save sketched shapes before exiting?")) {
+               const wkt = sketchesToWkt(targetSketches, SCALE_M);
+               if (wkt) setGeometry(prev => ({ ...prev, [targetLayer]: wkt }));
+            } else {
+               handleClearSketch();
+            }
+         }
+         setIsSketchingMode(false);
+         setActiveTool('select');
+         setSelectedSensorIndex(null);
+      }
+    };
+    window.addEventListener('keydown', handleEsc);
+    return () => window.removeEventListener('keydown', handleEsc);
+  }, [isSketchingMode, targetSketches, targetLayer, SCALE_M, setGeometry]);
+
+  return (
+    <div className="editor-container">
+
+      {/* ── Left: Canvas + Rulers ── */}
+      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+
+        {/* Floating Draggable Tool Bar */}
+        <div className="toolbar" 
+          onMouseDown={handleDragStart}
+          style={{ 
+            display: 'flex', justifyContent: 'space-between',
+            position: 'absolute', left: toolbarPos.x, top: toolbarPos.y,
+            cursor: isDragToolbar ? 'grabbing' : 'grab',
+            zIndex: 100 
+          }}>
+          <div style={{ display: 'flex', gap: 10, borderRight: '1px solid #444', paddingRight: 8, marginRight: 8, alignItems: 'center' }}>
+            <GripHorizontal size={14} color="#666" />
+            {[['FootPrint', showFootPrint, setShowFootPrint, '#999', !!geometry.FootPrint],
+              ['Load1',     showL1,        setShowL1,        '#2196F3', !!geometry.Load1],
+              ['Load2',     showL2,        setShowL2,        '#4CAF50', !!geometry.Load2]
+            ].map(([lbl, val, set, col, isEnabled]) => (
+              <label key={lbl} className="checkbox-group" style={{ color: col, opacity: isEnabled ? 1 : 0.4 }}>
+                <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} disabled={!isEnabled} />
+                {lbl}
+              </label>
+            ))}
+          </div>
+          
+          {isSketchingMode && (
+          <div style={{ display: 'flex', gap: 5, background: '#222', padding: '2px 8px', borderRadius: 6, alignItems: 'center' }}>
+            <button onClick={() => setActiveTool('select')} title="Select"
+              style={{ background: activeTool === 'select' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+              <MousePointer2 size={16} />
+            </button>
+            <button onClick={() => setActiveTool('line')} title="Line"
+              style={{ background: activeTool === 'line' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+              <PenLine size={16} />
+            </button>
+            <button onClick={() => setActiveTool('circle')} title="Circle"
+              style={{ background: activeTool === 'circle' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+              <CircleIcon size={16} />
+            </button>
+            <button onClick={() => setActiveTool('rect')} title="Rectangle"
+              style={{ background: activeTool === 'rect' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+              <Square size={16} />
+            </button>
+            <button onClick={() => setActiveTool('dimension')} title="Dimension"
+              style={{ background: activeTool === 'dimension' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+              <Ruler size={16} />
+            </button>
+            
+            <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
+
+            <button onClick={undo} title="Undo (Ctrl+Z)"
+              style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+              <Undo2 size={16} />
+            </button>
+            <button onClick={handleClearSketch} title="Clear All Sketch"
+              style={{ background: 'transparent', color: '#ff5252', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+              <Trash2 size={16} />
+            </button>
+            
+            <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
+
+            <div style={{ display: 'flex', gap: 2 }}>
+               {[
+                 ['coincide', Link2], ['equal', Equal], ['vertical', ArrowUp], 
+                 ['horizontal', ArrowRight], ['parallel', Rows], ['perpendicular', CornerDownLeft], ['anchor', Anchor]
+               ].map(([t, Icon]) => (
+                  <button key={t} onClick={() => setActiveTool(t)} title={t.charAt(0).toUpperCase() + t.slice(1)}
+                    style={{ background: activeTool === t ? '#1a3a5c' : 'transparent', color: '#00e5ff', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+                    <Icon size={16} />
+                  </button>
+               ))}
+            </div>
+
+            <div style={{ width: 1, height: 16, background: '#333', margin: '0 4px' }} />
+
+            <button onClick={() => {
+              const wkt = sketchesToWkt(targetSketches, SCALE_M);
+              if (wkt) {
+                setGeometry(prev => ({ ...prev, [targetLayer]: wkt }));
+                setIsSketchingMode(false);
+                setActiveTool('select');
+                alert(`Sketch applied to ${targetLayer}!`);
+              }
+            }} style={{ background: '#1a4a25', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
+              Finalize
+            </button>
+          </div>
+          )}
+        </div>
+
+        <GridCanvas initialScale={1.0} draggable={activeTool === 'select'}>
+          {({ scale: canvasScale, setOverlay }) => (
+            <Layer>
+              {/* FootPrint */}
+              {parsedFP.map((pts, i) => (
+                <Line key={`fp-${i}`} points={pts} fill="rgba(153,153,153,0.4)" closed stroke="#888" strokeWidth={1 / canvasScale} />
+              ))}
+              {/* Load 1 */}
+              {parsedL1.map((pts, i) => (
+                <Line key={`l1-${i}`} points={pts} fill="rgba(33,150,243,0.4)" closed stroke="#2196F3" strokeWidth={1 / canvasScale} />
+              ))}
+              {/* Load 2 */}
+              {parsedL2.map((pts, i) => (
+                <Line key={`l2-${i}`} points={pts} fill="rgba(76,175,80,0.4)" closed stroke="#4CAF50" strokeWidth={1 / canvasScale} />
+              ))}
+              {/* CAD Sketches */}
+              {isSketchingMode && (
+                <CADSketcher 
+                  sketches={targetSketches} 
+                  setSketches={(v) => setCadFieldSafe(targetLayer, null, 'sketches', v)} 
+                  dimensions={targetDimensions}
+                  setDimensions={(v) => setCadFieldSafe(targetLayer, null, 'dimensions', v)}
+                  fixedPoints={targetFixedPoints}
+                  setFixedPoints={(v) => setCadFieldSafe(targetLayer, null, 'fixedPoints', v)}
+                  constraints={targetConstraints}
+                  setConstraints={(v) => setCadFieldSafe(targetLayer, null, 'constraints', v)}
+                  referenceVertices={referenceVertices}
+                  pushToHistory={pushToHistory}
+                  scale={canvasScale} 
+                  SCALE_M={SCALE_M} 
+                  activeTool={activeTool} 
+                  setOverlay={setOverlay}
+                />
+              )}
+
+              {/* Sensors */}
+              {sensors.map((s, i) => (
+                <LidarMarker
+                  key={`s-${i}`}
+                  x={s.x * SCALE_M}
+                  y={-s.y * SCALE_M}
+                  rotation={-s.mount}
+                  scale={canvasScale}
+                  name={s.name}
+                  dia={s.dia}
+                  SCALE_M={SCALE_M}
+                  draggable
+                  selected={selectedSensorIndex === i}
+                  onDragMove={(e) => {
+                    const nx = e.target.x() / SCALE_M;
+                    const ny = -e.target.y() / SCALE_M;
+                    // Highlight this sensor and update temporary form if it's selected
+                    if (selectedSensorIndex === i) {
+                       setFormData(f => ({ ...f, x: Number(nx.toFixed(3)), y: Number(ny.toFixed(3)) }));
+                    }
+                  }}
+                  onDragEnd={(e) => {
+                    const nx = Number((e.target.x() / SCALE_M).toFixed(3));
+                    const ny = Number((-e.target.y() / SCALE_M).toFixed(3));
+                    const updated = [...sensors];
+                    updated[i] = { ...updated[i], x: nx, y: ny };
+                    setSensors(updated);
+                    setSelectedSensorIndex(i);
+                  }}
+                  onSelect={() => setSelectedSensorIndex(i)}
+                />
+              ))}
+            </Layer>
+          )}
+        </GridCanvas>
+
+        {isSketchingMode && (
+          <ConstraintList 
+            constraints={targetConstraints} 
+            setConstraints={(v) => setCadFieldSafe(targetLayer, null, 'constraints', v)} 
+            dimensions={targetDimensions} 
+            setDimensions={(v) => setCadFieldSafe(targetLayer, null, 'dimensions', v)} 
+            fixedPoints={cadData?.[targetLayer]?.fixedPoints}
+            setFixedPoints={(v) => setCadFieldSafe(targetLayer, null, 'fixedPoints', v)}
+          />
+        )}
+      </div>
+
+      {/* ── Right: Config Panel ── */}
+      <div className="config-panel">
+
+        {/* Sensor Manager */}
+        <div className="panel-section">
+          <div className="panel-title">LiDAR Manager</div>
+          <div className="sensor-list">
+            {sensors.map((s, i) => (
+              <div key={i} className={`sensor-item ${selectedSensorIndex === i ? 'selected' : ''}`}
+                onClick={() => {
+                  setSelectedSensorIndex(i);
+                  setFormData(s);
+                }}
+                onDoubleClick={() => {
+                  setSelectedSensorIndex(i);
+                  setFormData(s);
+                }}>
+                {s.name}
+                <span style={{ fontSize: '0.8rem', color: '#888', marginLeft: 6 }}>({s.model})</span>
+              </div>
+            ))}
+          </div>
+          <div className="row-group">
+            <button className="btn-blue" onClick={handleAddSensor}>+ Add</button>
+            <button className="btn-red"  onClick={handleDeleteSensor}>– Del</button>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto 1fr', gap: '8px', alignItems: 'center', marginTop: 8 }}>
+            <span>Name</span>
+            <input className="dark-input" value={formData.name}  
+              onChange={e => setFormData({ ...formData, name: e.target.value })} 
+              onKeyDown={e => e.key === 'Enter' && handleSaveSensor()}
+              style={{ gridColumn: '2 / span 3' }} />
+            {[['X (m)', 'x'], ['Y (m)', 'y'], ['Mount °', 'mount'], ['FOV °', 'fov'], ['Range (m)', 'r'], ['Dia (mm)', 'dia']].map(([lbl, key]) => (
+              <React.Fragment key={key}>
+                <span style={{ fontSize: '0.85rem', color: '#aaa' }}>{lbl}</span>
+                <input type="text" className="dark-input" value={formData[key]}
+                  onChange={e => setFormData({ ...formData, [key]: e.target.value })} 
+                  onBlur={e => {
+                    if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
+                      setFormData(prev => ({ ...prev, [key]: 0 }));
+                    } else {
+                      setFormData(prev => ({ ...prev, [key]: parseFloat(e.target.value) }));
+                    }
+                  }}
+                  onKeyDown={e => e.key === 'Enter' && handleSaveSensor()} />
+              </React.Fragment>
+            ))}
+          </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
+            <input type="checkbox" checked={formData.flipped}
+              onChange={e => setFormData({ ...formData, flipped: e.target.checked })} />
+            Flipped (Upside Down)
+          </label>
+
+          <button className="primary-btn" onClick={handleSaveSensor} style={{ marginTop: 10 }}>Apply Changes</button>
+        </div>
+
+        {/* Geometry Loader */}
+        <div className="panel-section">
+          <div className="panel-title">Geometry Loader</div>
+          {['FootPrint', 'Load1', 'Load2'].map((key) => (
+            <div className="file-row" key={key} style={{ background: targetLayer === key ? 'rgba(26,58,92,0.3)' : 'transparent', borderRadius: 4, padding: 2 }}>
+              <label className="btn-blue" style={{ textAlign: 'center', cursor: 'pointer', flex: 2, fontSize: '0.8rem', padding: '5px' }}>
+                {geometry[key] ? `✓ ${key}` : key}
+                <input type="file" style={{ display: 'none' }} accept=".dxf" onChange={e => handleUpload(e, key)} />
+              </label>
+              <button className="btn-blue" title="Draw manually" onClick={() => {
+                 setTargetLayer(key);
+                 setActiveTool('line');
+                 setIsSketchingMode(true);
+              }} style={{ padding: '0 8px' }}>
+                <PencilLine size={14} />
+              </button>
+              <button className="btn-red" title="Clear both DXF and Sketch" onClick={() => {
+                 handleClear(key);
+                 setSketches([]);
+              }} style={{ padding: '0 8px' }}>✕</button>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ flex: 1 }} />
+        <button className="btn-teal" onClick={() => setActiveTab('Generation')}>Next ›</button>
+      </div>
+
+      <style>{`.dark-input{background:#1e1e1e;border:1px solid #555;color:white;padding:5px 7px;border-radius:4px;width:100%;box-sizing:border-box;font-size:0.85rem}`}</style>
+    </div>
+  );
+};
+
+export default Editor;
