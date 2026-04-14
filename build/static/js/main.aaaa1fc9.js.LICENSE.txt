@@ -1,4 +1,13 @@
 /**
+   * splaytree v3.1.0
+   * Fast Splay tree for Node and browser
+   *
+   * @author Alexander Milevski <info@w8r.name>
+   * @license MIT
+   * @preserve
+   */
+
+/**
  * @license React
  * react-dom.production.min.js
  *

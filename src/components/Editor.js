@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layer, Line, Circle, Group } from 'react-konva';
-import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, PencilLine, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Anchor } from 'lucide-react';
+import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, PencilLine, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Anchor, Hammer } from 'lucide-react';
 import axios from 'axios';
 import { parseWktToKonva } from '../utils/wktParser';
 import GridCanvas, { SCALE_M } from './GridCanvas';
@@ -18,6 +18,9 @@ const Editor = ({ globals, setActiveTab }) => {
     selectedSensorIndex, setSelectedSensorIndex,
     activeTool, setActiveTool
   } = globals;
+  
+  const [isConstructionMode, setIsConstructionMode] = useState(false);
+  const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 150 });
   const [showFootPrint, setShowFootPrint] = useState(true);
   const [showL1, setShowL1]   = useState(true);
   const [showL2, setShowL2]   = useState(true);
@@ -26,7 +29,6 @@ const Editor = ({ globals, setActiveTab }) => {
     name: 'New Sensor', x: 0, y: 0, mount: 0, fov: 270, r: 10, dia: 150, flipped: false
   });
   const [targetLayer, setTargetLayer] = useState('FootPrint');
-  const [toolbarPos, setToolbarPos] = useState({ x: 10, y: 40 });
   const [isDragToolbar, setIsDragToolbar] = useState(false);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
@@ -187,13 +189,23 @@ const Editor = ({ globals, setActiveTab }) => {
               style={{ background: activeTool === 'select' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
               <MousePointer2 size={16} />
             </button>
-            <button onClick={() => setActiveTool('line')} title="Line"
-              style={{ background: activeTool === 'line' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-              <PenLine size={16} />
+            <button onClick={() => setActiveTool('anchor')} title="Anchor" style={{ background: activeTool === 'anchor' ? '#1a3a5c' : 'transparent', color: '#00e5ff', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+               <Anchor size={16} />
+            </button>
+
+            <div style={{ width: 1, height: 16, background: '#333', margin: '0 4px' }} />
+            
+            <button onClick={() => setIsConstructionMode(!isConstructionMode)} title="Toggle Construction Mode"
+              style={{ background: isConstructionMode ? '#5c4d1a' : 'transparent', color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+               <Hammer size={16} />
             </button>
             <button onClick={() => setActiveTool('circle')} title="Circle"
               style={{ background: activeTool === 'circle' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
               <CircleIcon size={16} />
+            </button>
+            <button onClick={() => setActiveTool('line')} title="Line"
+              style={{ background: activeTool === 'line' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+              <PenLine size={16} />
             </button>
             <button onClick={() => setActiveTool('rect')} title="Rectangle"
               style={{ background: activeTool === 'rect' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
@@ -278,6 +290,7 @@ const Editor = ({ globals, setActiveTab }) => {
                   SCALE_M={SCALE_M} 
                   activeTool={activeTool} 
                   setOverlay={setOverlay}
+                  isConstructionMode={isConstructionMode}
                 />
               )}
 

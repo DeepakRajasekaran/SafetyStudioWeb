@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Layer, Line, Circle, Group } from 'react-konva';
-import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Settings, Info, List, Database } from 'lucide-react';
+import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Settings, Info, List, Database, Hammer } from 'lucide-react';
 import axios from 'axios';
 import { parseWktToKonva } from '../utils/wktParser';
 import GridCanvas, { SCALE_M } from './GridCanvas';
@@ -96,6 +96,7 @@ const Results = ({ globals }) => {
   const [isEditMode, setIsEditMode] = useState(false);
   const [gcsStatus, setGcsStatus] = useState('loading'); // 'loading' | 'ready' | 'error'
   const [resultsMode, setResultsMode] = useState('polygon'); // 'polygon' | 'cad'
+  const [isConstructionMode, setIsConstructionMode] = useState(false);
   const [caseListOpen, setCaseListOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [draftCad, setDraftCad] = useState(null);
@@ -337,6 +338,34 @@ const Results = ({ globals }) => {
     syncPolyToWkt(raw);
   };
 
+  const handlePointDelete = (polyIdx, pIdx) => {
+    if (!currentResult?.final_field_wkt) return;
+    const raw = parseWktToKonva(currentResult.final_field_wkt);
+    const poly = [...raw[polyIdx]];
+    
+    // Polygon must have at least 3 unique vertices (4 points total including closing)
+    if (poly.length <= 8) {
+      alert("Cannot delete vertex: a polygon must have at least 3 vertices.");
+      return;
+    }
+
+    const newPoly = [];
+    for (let i = 0; i < poly.length / 2; i++) {
+      if (i === pIdx) continue;
+      newPoly.push(poly[i * 2], poly[i * 2 + 1]);
+    }
+
+    // Ensure it's still closed correctly if we deleted the first or last point
+    if (pIdx === 0 || pIdx === (poly.length / 2) - 1) {
+      const lastIdx = (newPoly.length / 2) - 1;
+      newPoly[0] = newPoly[lastIdx * 2];
+      newPoly[1] = newPoly[lastIdx * 2 + 1];
+    }
+
+    raw[polyIdx] = newPoly;
+    syncPolyToWkt(raw);
+  };
+
   const syncPolyToWkt = (rawPolys) => {
     const isMulti = rawPolys.length > 1;
     let wktStr = isMulti ? "MULTIPOLYGON(" : "POLYGON(";
@@ -453,6 +482,12 @@ const Results = ({ globals }) => {
             <button onClick={() => setActiveTool('circle')} style={{ background: activeTool === 'circle' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><CircleIcon size={16} /></button>
             <button onClick={() => setActiveTool('rect')} style={{ background: activeTool === 'rect' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Square size={16} /></button>
             <button onClick={() => setActiveTool('dimension')} style={{ background: activeTool === 'dimension' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Ruler size={16} /></button>
+            <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
+            
+            <button onClick={() => setIsConstructionMode(!isConstructionMode)} title="Toggle Construction Mode"
+              style={{ background: isConstructionMode ? '#5c4d1a' : 'transparent', color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+               <Hammer size={16} />
+            </button>
             <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
             <button onClick={undo} style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Undo2 size={16} /></button>
             <button onClick={handleClearSketch} style={{ background: 'transparent', color: '#ff5252', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Trash2 size={16} /></button>
@@ -617,6 +652,10 @@ const Results = ({ globals }) => {
                          return (
                            <Circle key={`h-${pIdx}`} x={poly[pIdx*2]} y={poly[pIdx*2+1]} radius={6/scale} fill="#ff1744" stroke="#fff" strokeWidth={2/scale} draggable 
                              onDragMove={(e) => handlePointDrag(polyIdx, pIdx, e.target.x(), e.target.y())} 
+                             onContextMenu={(e) => {
+                               e.evt.preventDefault();
+                               handlePointDelete(polyIdx, pIdx);
+                             }}
                            />
                          );
                        })}
@@ -663,6 +702,7 @@ const Results = ({ globals }) => {
                       SCALE_M={SCALE_M} 
                       activeTool={activeTool}
                       setOverlay={setOverlay}
+                      isConstructionMode={isConstructionMode}
                     />
                   );
                 })()}

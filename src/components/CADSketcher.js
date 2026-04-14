@@ -151,7 +151,7 @@ const DimOverlay = ({ x, y, value, tolerance, onCommit, onCancel }) => {
   );
 };
 
-const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPoints, setFixedPoints, constraints = [], setConstraints, referenceVertices = [], pushToHistory, scale, SCALE_M, activeTool, setOverlay }) => {
+const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPoints, setFixedPoints, constraints = [], setConstraints, referenceVertices = [], pushToHistory, scale, SCALE_M, activeTool, setOverlay, isConstructionMode }) => {
   const [newShape, setNewShape] = useState(null);
   const [dimSelection, setDimSelection] = useState([]);
   const [constraintSelection, setConstraintSelection] = useState([]);
@@ -393,9 +393,9 @@ const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPo
     if (activeTool === 'line' || activeTool === 'circle' || activeTool === 'rect') {
       if (drawingState.current.step === 0) {
         drawingState.current = { step: 1, isDragging: false, startPos: { x: pos.x, y: pos.y } };
-        if (activeTool === 'line') setNewShape({ type: 'line', points: [snapped.x, snapped.y, snapped.x, snapped.y] });
-        else if (activeTool === 'circle') setNewShape({ type: 'circle', center: [snapped.x, snapped.y], radius: 0 });
-        else if (activeTool === 'rect') setNewShape({ type: 'rect', start: [snapped.x, snapped.y], end: [snapped.x, snapped.y] });
+        if (activeTool === 'line') setNewShape({ type: 'line', points: [snapped.x, snapped.y, snapped.x, snapped.y], construction: isConstructionMode });
+        else if (activeTool === 'circle') setNewShape({ type: 'circle', center: [snapped.x, snapped.y], radius: 0, construction: isConstructionMode });
+        else if (activeTool === 'rect') setNewShape({ type: 'rect', start: [snapped.x, snapped.y], end: [snapped.x, snapped.y], construction: isConstructionMode });
       } else if (drawingState.current.step === 1) {
         drawingState.current = { step: 0, isDragging: false, startPos: null };
         pushToHistory();
@@ -478,12 +478,14 @@ const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPo
     <Group onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
       <Circle radius={10000} fill="rgba(0,0,0,0)" />
       {sketches.map(s => {
-        const color = isFullyConstrained(s, dimensions, fixedPoints) ? '#aaaaaa' : 'white';
+        const baseColor = isFullyConstrained(s, dimensions, fixedPoints) ? '#aaaaaa' : 'white';
+        const color = s.construction ? '#666' : baseColor;
+        const dash = s.construction ? [5/scale, 5/scale] : null;
         return (
         <Group key={s.id}>
-          {s.type === 'line' && <Line points={s.points} stroke={color} strokeWidth={2 / scale} />}
-          {s.type === 'circle' && <Circle x={s.center[0]} y={s.center[1]} radius={s.radius} stroke={color} strokeWidth={2 / scale} />}
-          {s.type === 'rect' && <Line points={[s.start[0], s.start[1], s.end[0], s.start[1], s.end[0], s.end[1], s.start[0], s.end[1], s.start[0], s.start[1]]} stroke={color} strokeWidth={2 / scale} closed />}
+          {s.type === 'line' && <Line points={s.points} stroke={color} strokeWidth={2 / scale} dash={dash} />}
+          {s.type === 'circle' && <Circle x={s.center[0]} y={s.center[1]} radius={s.radius} stroke={color} strokeWidth={2 / scale} dash={dash} />}
+          {s.type === 'rect' && <Line points={[s.start[0], s.start[1], s.end[0], s.start[1], s.end[0], s.end[1], s.start[0], s.end[1], s.start[0], s.start[1]]} stroke={color} strokeWidth={2 / scale} closed dash={dash} />}
         </Group>
       )})}
       {newShape && (

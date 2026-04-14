@@ -209,16 +209,26 @@ function solveIteration(particles, constraints, dimensions, sketches) {
         if (!r1.fixed) applyDelta(particles, r1, 0, dy1);
         if (!r2.fixed) applyDelta(particles, r2, 0, dy2);
       } else {
-        // Line horizontal
+        // Single point or edge horizontal
+        const r1 = res(v1);
+        if (!r1) return;
+        
+        // If it's a line/rect edge, we should ideally make the whole segment horizontal.
+        // For simple vertex selection, making a single point 'horizontal' doesn't mean much,
+        // but if it's a line ID, we treat as line-horizontal.
         const s = sketches.find(sk => sk.id === v1.sketchId);
-        if (!s || s.type !== 'line') return;
-        const p1 = particles[`${s.id}-start`], p2 = particles[`${s.id}-end`];
-        if (!p1 || !p2) return;
-        const targetY = (p1.y + p2.y) / 2;
-        const dy1 = targetY - p1.y, dy2 = targetY - p2.y;
-        residual += dy1 * dy1 + dy2 * dy2;
-        if (!p1.fixed) p1.y += dy1 * STEP;
-        if (!p2.fixed) p2.y += dy2 * STEP;
+        if (s && (s.type === 'line' || s.type === 'rect')) {
+          const p1 = particles[resolveParticleId({sketchId: s.id, part: v1.part === 'end' ? 'end' : 'start'})];
+          const p2 = particles[resolveParticleId({sketchId: s.id, part: v1.part === 'end' ? 'start' : 'end'})];
+          // For rects, we keep them axis aligned anyway, but this satisfies the solver
+          if (p1 && p2) {
+            const targetY = (p1.y + p2.y) / 2;
+            const dy1 = targetY - p1.y, dy2 = targetY - p2.y;
+            residual += dy1 * dy1 + dy2 * dy2;
+            if (!p1.fixed) p1.y += dy1 * STEP;
+            if (!p2.fixed) p2.y += dy2 * STEP;
+          }
+        }
       }
     }
 
@@ -233,16 +243,21 @@ function solveIteration(particles, constraints, dimensions, sketches) {
         if (!r1.fixed) applyDelta(particles, r1, dx1, 0);
         if (!r2.fixed) applyDelta(particles, r2, dx2, 0);
       } else {
-        // Line vertical
+        // Single target vertical
+        const r1 = res(v1);
+        if (!r1) return;
         const s = sketches.find(sk => sk.id === v1.sketchId);
-        if (!s || s.type !== 'line') return;
-        const p1 = particles[`${s.id}-start`], p2 = particles[`${s.id}-end`];
-        if (!p1 || !p2) return;
-        const targetX = (p1.x + p2.x) / 2;
-        const dx1 = targetX - p1.x, dx2 = targetX - p2.x;
-        residual += dx1 * dx1 + dx2 * dx2;
-        if (!p1.fixed) p1.x += dx1 * STEP;
-        if (!p2.fixed) p2.x += dx2 * STEP;
+        if (s && (s.type === 'line' || s.type === 'rect')) {
+          const p1 = particles[resolveParticleId({sketchId: s.id, part: v1.part === 'end' ? 'end' : 'start'})];
+          const p2 = particles[resolveParticleId({sketchId: s.id, part: v1.part === 'end' ? 'start' : 'end'})];
+          if (p1 && p2) {
+            const targetX = (p1.x + p2.x) / 2;
+            const dx1 = targetX - p1.x, dx2 = targetX - p2.x;
+            residual += dx1 * dx1 + dx2 * dx2;
+            if (!p1.fixed) p1.x += dx1 * STEP;
+            if (!p2.fixed) p2.x += dx2 * STEP;
+          }
+        }
       }
     }
 
