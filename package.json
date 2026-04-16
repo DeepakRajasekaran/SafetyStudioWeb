@@ -4,7 +4,6 @@
   "private": true,
   "proxy": "http://127.0.0.1:5000",
   "dependencies": {
-    "@salusoft89/planegcs": "^1.1.7",
     "axios": "^1.6.2",
     "konva": "^9.2.3",
     "lucide-react": "^1.7.0",

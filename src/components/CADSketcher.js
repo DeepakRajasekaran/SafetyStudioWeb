@@ -6,12 +6,11 @@ import { vec, isPointSafe } from '../utils/cadMath';
 import { RULER } from './GridCanvas';
 
 /** Unwrap propagateConstraints result — now returns {sketches, error} */
-const runSolver = (sketches, constraints, dimensions, fixedPoints, SCALE_M, referenceVertices) => {
+function runSolver(sketches, constraints, dimensions, fixedPoints, SCALE_M, referenceVertices) {
   const result = propagateConstraints(sketches, constraints, dimensions, fixedPoints, SCALE_M, referenceVertices);
-  // Support both old (plain array) and new ({sketches, error}) return shapes
   if (Array.isArray(result)) return { sketches: result, error: null };
   return result;
-};
+}
 
 /**
  * Centralized vertex resolver for sketches.
@@ -47,7 +46,7 @@ function resolveCadPoint(s, part) {
 /**
  * ISO Standard Dimension Annotation.
  */
-const Annotation = ({ x1, y1, x2, y2, label, scale, tolerance = '', symbol = '', onClick }) => {
+function Annotation({ x1, y1, x2, y2, label, scale, tolerance = '', symbol = '', onClick }) {
   const safeScale = scale && scale > 0 ? scale : 1;
   const dx = x2 - x1;
   const dy = y2 - y1;
@@ -116,9 +115,9 @@ const Annotation = ({ x1, y1, x2, y2, label, scale, tolerance = '', symbol = '',
       />
     </Group>
   );
-};
+}
 
-const DimOverlay = ({ x, y, value, tolerance, onCommit, onCancel }) => {
+function DimOverlay({ x, y, value, tolerance, onCommit, onCancel }) {
   const [val, setVal] = useState(value);
   const [tol, setTol] = useState(tolerance.replace('±', ''));
   const ref = useRef(null);
@@ -149,25 +148,167 @@ const DimOverlay = ({ x, y, value, tolerance, onCommit, onCancel }) => {
         style={{ background: '#000', color: '#ff9800', border: '1px solid #333', padding: '4px', width: '40px', outline: 'none' }} />
     </div>
   );
-};
+}
 
-const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPoints, setFixedPoints, constraints = [], setConstraints, referenceVertices = [], pushToHistory, scale, SCALE_M, activeTool, setOverlay, isConstructionMode }) => {
+function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPoints, setFixedPoints, constraints = [], setConstraints, setCadBatchSafe, referenceVertices = [], pushToHistory, scale, SCALE_M, activeTool, setOverlay, isConstructionMode, isSubtractionMode }) {
+  // 1. Foundation State & Refs (Must be first to avoid TDZ ReferenceErrors in dependency arrays)
   const [newShape, setNewShape] = useState(null);
   const [dimSelection, setDimSelection] = useState([]);
   const [constraintSelection, setConstraintSelection] = useState([]);
-  const drawingState = useRef({ step: 0, isDragging: false, startPos: null });
+  const drawingState = useRef({ step: 0, isDragging: false, startPos: null, startSnap: null });
 
-  // Stable refs so useEffect callbacks always see current values
   const sketchesRef      = useRef(sketches);
   const constraintsRef   = useRef(constraints);
   const dimensionsRef    = useRef(dimensions);
   const fixedPointsRef   = useRef(fixedPoints);
+
   useEffect(() => { sketchesRef.current    = sketches;    }, [sketches]);
   useEffect(() => { constraintsRef.current = constraints; }, [constraints]);
   useEffect(() => { dimensionsRef.current  = dimensions;  }, [dimensions]);
   useEffect(() => { fixedPointsRef.current = fixedPoints; }, [fixedPoints]);
 
-  // Reset drawing state when tool changes
+  // 1. Internal Helpers (Moved to top of component body to prevent ReferenceErrors)
+  const getVertices = useCallback(() => {
+    const v = [{ x: 0, y: 0, sketchId: 'origin', part: 'origin', type: 'origin' }, ...referenceVertices];
+    sketchesRef.current.forEach(s => {
+      if (s.type === 'line') {
+        v.push({ ...resolveCadPoint(s, 'start'), sketchId: s.id, part: 'start' });
+        v.push({ ...resolveCadPoint(s, 'end'), sketchId: s.id, part: 'end' });
+        v.push({ ...resolveCadPoint(s, 'mid'), sketchId: s.id, part: 'mid' });
+      } else if (s.type === 'circle') {
+        const center = resolveCadPoint(s, 'center');
+        v.push({ ...center, sketchId: s.id, part: 'center' });
+        v.push({ ...resolveCadPoint(s, 'rad'), sketchId: s.id, part: 'rad' });
+      } else if (s.type === 'rect') {
+        ['p1', 'p2', 'p3', 'p4', 'mid_top', 'mid_bottom', 'mid_left', 'mid_right', 'center'].forEach(p => v.push({ ...resolveCadPoint(s, p), sketchId: s.id, part: p }));
+      }
+    });
+    return v;
+  }, [referenceVertices]);
+
+  const snapPos = useCallback((rawX, rawY) => {
+    const threshold = 18 / scale;
+    let best = { x: rawX, y: rawY, snapped: false };
+    let minDist = threshold;
+
+    getVertices().forEach(v => {
+      const d = vec.dist(v, { x: rawX, y: rawY });
+      if (d < minDist) { minDist = d; best = { ...v, snapped: true }; }
+    });
+
+    if (best.snapped) return best;
+
+    sketchesRef.current.forEach(s => {
+      if (s.type === 'line') {
+        const p = vec.project({x: rawX, y: rawY}, {x: s.points[0], y: s.points[1]}, {x: s.points[2], y: s.points[3]});
+        const d = vec.dist(p, {x: rawX, y: rawY});
+        if (d < minDist) { minDist = d; best = { ...p, snapped: true, sketchId: s.id, type: 'edge' }; }
+      } else if (s.type === 'circle') {
+        const c = { x: s.center[0], y: s.center[1] };
+        const d = vec.dist(c, { x: rawX, y: rawY });
+        if (d > 0) {
+          const ratio = s.radius / d;
+          const p = { x: c.x + (rawX - c.x) * ratio, y: c.y + (rawY - c.y) * ratio };
+          const distToEdge = Math.abs(d - s.radius);
+          if (distToEdge < minDist) { minDist = distToEdge; best = { ...p, snapped: true, sketchId: s.id, type: 'edge' }; }
+        }
+      }
+    });
+    return best;
+  }, [getVertices, scale]);
+
+  const commitDim = useCallback((v1, v2, valStr, tolStr, symbol = '') => {
+    const val = parseFloat(valStr);
+    if (!isNaN(val)) {
+      const newDim = { id: Date.now(), v1, v2, value: val, tolerance: tolStr ? '±' + tolStr : '', symbol, label: val.toFixed(3) };
+      const allDims = [...dimensionsRef.current, newDim];
+      let prePositioned = applyDimensionUpdate(sketchesRef.current, v1, v2, val, SCALE_M, dimensionsRef.current, fixedPointsRef.current, referenceVertices);
+      const solveResult = runSolver(prePositioned, constraintsRef.current, allDims, fixedPointsRef.current, SCALE_M, referenceVertices);
+      if (solveResult.error) {
+        alert('⚠️ Dimension Error:\n\n' + solveResult.error);
+        setOverlay(null);
+        return;
+      }
+      pushToHistory();
+      setSketches(solveResult.sketches);
+      setDimensions(allDims);
+    }
+    setOverlay(null);
+  }, [SCALE_M, pushToHistory, referenceVertices, setDimensions, setOverlay, setSketches]);
+
+  const editDim = useCallback((dimId, v1, v2, valStr, tolStr) => {
+    const val = parseFloat(valStr);
+    if (!isNaN(val)) {
+      const updatedDimensions = dimensionsRef.current.map(d =>
+        d.id === dimId ? { ...d, value: val, tolerance: tolStr ? '±' + tolStr : '', label: val.toFixed(3) } : d
+      );
+      let prePositioned = applyDimensionUpdate(sketchesRef.current, v1, v2, val, SCALE_M, dimensionsRef.current, fixedPointsRef.current, referenceVertices);
+      const solveResult = runSolver(prePositioned, constraintsRef.current, updatedDimensions, fixedPointsRef.current, SCALE_M, referenceVertices);
+      if (solveResult.error) {
+        alert('⚠️ Dimension Error:\n\n' + solveResult.error);
+        setOverlay(null);
+        return;
+      }
+      pushToHistory();
+      setSketches(solveResult.sketches);
+      setDimensions(updatedDimensions);
+    }
+    setOverlay(null);
+  }, [SCALE_M, pushToHistory, referenceVertices, setDimensions, setOverlay, setSketches]);
+
+  const finalizeShape = useCallback((finalPos) => {
+    if (!newShape) return;
+    
+    let finalized = { ...newShape };
+    if (finalPos) {
+       if (finalized.type === 'line') finalized.points = [finalized.points[0], finalized.points[1], finalPos.x, finalPos.y];
+       if (finalized.type === 'circle') finalized.radius = vec.dist({x: finalized.center[0], y: finalized.center[1]}, finalPos);
+       if (finalized.type === 'rect') finalized.end = [finalPos.x, finalized.y];
+    }
+
+    if (finalized.type === 'line') {
+      const d = vec.dist({x: finalized.points[0], y: finalized.points[1]}, {x: finalized.points[2], y: finalized.points[3]});
+      if (d < 5 / scale) {
+         setNewShape(null);
+         drawingState.current = { step: 0, isDragging: false, startPos: null };
+         return;
+      }
+    }
+
+    drawingState.current = { step: 0, isDragging: false, startPos: null };
+    pushToHistory();
+
+    const typeCount = sketchesRef.current.filter(s => s.type === finalized.type).length + 1;
+    const typeLabels = { line: 'Line', circle: 'Circle', rect: 'Rect' };
+    const humanId = `${typeLabels[finalized.type] || 'Shape'} ${typeCount}`;
+
+    let newConstraints = [...constraintsRef.current];
+    if (drawingState.current.startSnap) {
+       newConstraints.push({ type: 'coincident', v1: { sketchId: humanId, part: finalized.type === 'rect' ? 'p1' : (finalized.type === 'circle' ? 'center' : 'start') }, v2: drawingState.current.startSnap });
+    }
+    const snapMeta = finalPos && finalPos.snapped && finalPos.sketchId ? { sketchId: finalPos.sketchId, part: finalPos.part } : null;
+    if (snapMeta) {
+       newConstraints.push({ type: 'coincident', v1: { sketchId: humanId, part: finalized.type === 'rect' ? 'p3' : (finalized.type === 'circle' ? 'rad' : 'end') }, v2: snapMeta });
+    }
+
+    const solveResult = runSolver([...sketchesRef.current, { ...finalized, id: humanId, name: humanId }], newConstraints, dimensionsRef.current, fixedPointsRef.current, SCALE_M, referenceVertices);
+
+    drawingState.current = { step: 0, isDragging: false, startPos: null, startSnap: null };
+
+    if (setCadBatchSafe) {
+      setCadBatchSafe({
+        sketches: solveResult.sketches,
+        constraints: newConstraints
+      });
+    } else {
+      setSketches(solveResult.sketches);
+      if (setConstraints) setConstraints(newConstraints);
+    }
+    setNewShape(null);
+  }, [newShape, pushToHistory, setSketches, scale, SCALE_M, referenceVertices, setConstraints, setCadBatchSafe]);
+
+
+  // 2. Lifecycle & Interaction Hooks
   useEffect(() => {
     if (drawingState.current.step !== 0) {
       drawingState.current = { step: 0, isDragging: false, startPos: null };
@@ -181,7 +322,6 @@ const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPo
     const isConstraint = ['coincide', 'coincident', 'equal', 'vertical', 'horizontal', 'parallel', 'perpendicular'].includes(activeTool);
     if (!isConstraint || constraintSelection.length === 0) return;
 
-    // Use refs to avoid stale closures
     const currentSketches    = sketchesRef.current;
     const currentConstraints = constraintsRef.current;
     const currentDimensions  = dimensionsRef.current;
@@ -208,7 +348,6 @@ const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPo
         alert('⚠️ Constraint Error:\n\n' + anyError);
       } else {
         pushToHistory();
-        // Re-run full solve with all constraints to ensure consistency
         const solveResult = runSolver(updated, updatedConstraints, currentDimensions, currentFixed, SCALE_M, referenceVertices);
         if (solveResult.error) {
           alert('⚠️ Constraint Error:\n\n' + solveResult.error);
@@ -232,7 +371,6 @@ const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPo
       } else if (newConstraint) {
         pushToHistory();
         const allConstraints = [...currentConstraints, newConstraint];
-        // Re-solve with the complete set to keep everything consistent
         const solveResult = runSolver(res, allConstraints, currentDimensions, currentFixed, SCALE_M, referenceVertices);
         if (solveResult.error) {
           alert('⚠️ Constraint Error:\n\n' + solveResult.error);
@@ -246,61 +384,13 @@ const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPo
   // eslint-disable-next-line
   }, [activeTool, constraintSelection]);
 
-  const getVertices = useCallback(() => {
-    const v = [{ x: 0, y: 0, sketchId: 'origin', part: 'origin', type: 'origin' }, ...referenceVertices];
-    sketches.forEach(s => {
-      if (s.type === 'line') {
-        v.push({ ...resolveCadPoint(s, 'start'), sketchId: s.id, part: 'start' });
-        v.push({ ...resolveCadPoint(s, 'end'), sketchId: s.id, part: 'end' });
-        v.push({ ...resolveCadPoint(s, 'mid'), sketchId: s.id, part: 'mid' });
-      } else if (s.type === 'circle') {
-        const center = resolveCadPoint(s, 'center');
-        v.push({ ...center, sketchId: s.id, part: 'center' });
-        v.push({ ...resolveCadPoint(s, 'rad'), sketchId: s.id, part: 'rad' });
-      } else if (s.type === 'rect') {
-        ['p1', 'p2', 'p3', 'p4', 'mid_top', 'mid_bottom', 'mid_left', 'mid_right', 'center'].forEach(p => v.push({ ...resolveCadPoint(s, p), sketchId: s.id, part: p }));
-      }
-    });
-    return v;
-  }, [sketches]);
-
-  const snapPos = useCallback((rawX, rawY) => {
-    const threshold = 18 / scale;
-    let best = { x: rawX, y: rawY, snapped: false };
-    let minDist = threshold;
-
-    getVertices().forEach(v => {
-      const d = vec.dist(v, { x: rawX, y: rawY });
-      if (d < minDist) { minDist = d; best = { ...v, snapped: true }; }
-    });
-
-    if (best.snapped) return best;
-
-    sketches.forEach(s => {
-      if (s.type === 'line') {
-        const p = vec.project({x: rawX, y: rawY}, {x: s.points[0], y: s.points[1]}, {x: s.points[2], y: s.points[3]});
-        const d = vec.dist(p, {x: rawX, y: rawY});
-        if (d < minDist) { minDist = d; best = { ...p, snapped: true, sketchId: s.id, type: 'edge' }; }
-      } else if (s.type === 'circle') {
-        const c = { x: s.center[0], y: s.center[1] };
-        const d = vec.dist(c, { x: rawX, y: rawY });
-        if (d > 0) {
-          const ratio = s.radius / d;
-          const p = { x: c.x + (rawX - c.x) * ratio, y: c.y + (rawY - c.y) * ratio };
-          const distToEdge = Math.abs(d - s.radius);
-          if (distToEdge < minDist) { minDist = distToEdge; best = { ...p, snapped: true, sketchId: s.id, type: 'edge' }; }
-        }
-      }
-    });
-    return best;
-  }, [getVertices, scale, sketches]);
-
   const handleMouseDown = useCallback((e) => {
     if (!activeTool || activeTool === 'select') return;
     const stage = e.target.getStage();
     if (!stage) return;
     const pos = stage.getRelativePointerPosition();
     const snapped = snapPos(pos.x, pos.y);
+    const snapMeta = snapped.snapped && snapped.sketchId ? { sketchId: snapped.sketchId, part: snapped.part } : null;
 
     if (activeTool === 'dimension') {
       if (dimSelection.length === 0) {
@@ -391,59 +481,49 @@ const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPo
     }
 
     if (activeTool === 'line' || activeTool === 'circle' || activeTool === 'rect') {
+      const shapeProps = { construction: isConstructionMode, op: isSubtractionMode ? 'subtract' : 'union' };
+      
       if (drawingState.current.step === 0) {
-        drawingState.current = { step: 1, isDragging: false, startPos: { x: pos.x, y: pos.y } };
-        if (activeTool === 'line') setNewShape({ type: 'line', points: [snapped.x, snapped.y, snapped.x, snapped.y], construction: isConstructionMode });
-        else if (activeTool === 'circle') setNewShape({ type: 'circle', center: [snapped.x, snapped.y], radius: 0, construction: isConstructionMode });
-        else if (activeTool === 'rect') setNewShape({ type: 'rect', start: [snapped.x, snapped.y], end: [snapped.x, snapped.y], construction: isConstructionMode });
-      } else if (drawingState.current.step === 1) {
-        drawingState.current = { step: 0, isDragging: false, startPos: null };
+        drawingState.current = { step: 1, isDragging: false, startPos: { x: pos.x, y: pos.y }, startSnap: snapMeta };
+        if (activeTool === 'line') setNewShape({ type: 'line', points: [snapped.x, snapped.y, snapped.x, snapped.y], ...shapeProps });
+        else if (activeTool === 'circle') setNewShape({ type: 'circle', center: [snapped.x, snapped.y], radius: 0, ...shapeProps });
+        else if (activeTool === 'rect') setNewShape({ type: 'rect', start: [snapped.x, snapped.y], end: [snapped.x, snapped.y], ...shapeProps });
+      } else if (activeTool === 'line' && newShape) {
+        // Chain line: Continue to next segment
+        const typeCount = sketchesRef.current.filter(s => s.type === 'line').length + 1;
+        const humanId = `Line ${typeCount}`;
+        const finalLine = { ...newShape, id: humanId, name: humanId, points: [newShape.points[0], newShape.points[1], snapped.x, snapped.y] };
+        
+        let newConstraints = [...constraintsRef.current];
+        if (drawingState.current.startSnap) {
+           newConstraints.push({ type: 'coincident', v1: { sketchId: humanId, part: 'start' }, v2: drawingState.current.startSnap });
+        }
+        if (snapMeta) {
+           newConstraints.push({ type: 'coincident', v1: { sketchId: humanId, part: 'end' }, v2: snapMeta });
+        }
+
+        const solveResult = runSolver([...sketchesRef.current, finalLine], newConstraints, dimensionsRef.current, fixedPointsRef.current, SCALE_M, referenceVertices);
+        
         pushToHistory();
-        setSketches([...sketches, { ...newShape, id: Date.now() }]);
-        setNewShape(null);
+        if (setCadBatchSafe) {
+          setCadBatchSafe({
+            sketches: solveResult.sketches,
+            constraints: newConstraints
+          });
+        } else {
+          setSketches(solveResult.sketches);
+          if (setConstraints) setConstraints(newConstraints);
+        }
+        
+        drawingState.current.startPos = { x: snapped.x, y: snapped.y };
+        drawingState.current.startSnap = { sketchId: humanId, part: 'end' };
+        setNewShape({ type: 'line', points: [snapped.x, snapped.y, snapped.x, snapped.y], ...shapeProps });
+      } else if (activeTool !== 'line' && newShape) {
+        // Circle / Rect: Second click finishes it
+        finalizeShape(snapped);
       }
     }
-  }, [activeTool, snapPos, sketches, dimSelection, constraintSelection, SCALE_M, setOverlay, fixedPoints, dimensions, setSketches, pushToHistory, newShape]);
-
-  const commitDim = (v1, v2, valStr, tolStr, symbol = '') => {
-    const val = parseFloat(valStr);
-    if (!isNaN(val)) {
-      const newDim = { id: Date.now(), v1, v2, value: val, tolerance: tolStr ? '±' + tolStr : '', symbol, label: val.toFixed(3) };
-      const allDims = [...dimensions, newDim];
-      // First do a geometric approximation to pre-position the shape, then run full solve
-      let prePositioned = applyDimensionUpdate(sketches, v1, v2, val, SCALE_M, dimensions, fixedPoints, referenceVertices);
-      const solveResult = runSolver(prePositioned, constraints, allDims, fixedPoints, SCALE_M, referenceVertices);
-      if (solveResult.error) {
-        alert('⚠️ Dimension Error:\n\n' + solveResult.error);
-        setOverlay(null);
-        return;
-      }
-      pushToHistory();
-      setSketches(solveResult.sketches);
-      setDimensions(allDims);
-    }
-    setOverlay(null);
-  };
-
-  const editDim = (dimId, v1, v2, valStr, tolStr) => {
-    const val = parseFloat(valStr);
-    if (!isNaN(val)) {
-      const updatedDimensions = dimensions.map(d =>
-        d.id === dimId ? { ...d, value: val, tolerance: tolStr ? '±' + tolStr : '', label: val.toFixed(3) } : d
-      );
-      let prePositioned = applyDimensionUpdate(sketches, v1, v2, val, SCALE_M, dimensions, fixedPoints, referenceVertices);
-      const solveResult = runSolver(prePositioned, constraints, updatedDimensions, fixedPoints, SCALE_M, referenceVertices);
-      if (solveResult.error) {
-        alert('⚠️ Dimension Error:\n\n' + solveResult.error);
-        setOverlay(null);
-        return;
-      }
-      pushToHistory();
-      setSketches(solveResult.sketches);
-      setDimensions(updatedDimensions);
-    }
-    setOverlay(null);
-  };
+  }, [activeTool, snapPos, sketches, dimSelection, constraintSelection, SCALE_M, setOverlay, fixedPoints, dimensions, setSketches, pushToHistory, isConstructionMode, isSubtractionMode, newShape, finalizeShape]);
 
   const handleMouseMove = useCallback((e) => {
     if (drawingState.current.step === 0 || !newShape) return;
@@ -466,20 +546,26 @@ const CADSketcher = ({ sketches, setSketches, dimensions, setDimensions, fixedPo
   }, [newShape, snapPos]);
 
   const handleMouseUp = useCallback(() => {
-    if (drawingState.current.step === 1 && drawingState.current.isDragging && newShape) {
-      drawingState.current = { step: 0, isDragging: false, startPos: null };
-      pushToHistory();
-      setSketches([...sketches, { ...newShape, id: Date.now() }]);
-      setNewShape(null);
+    // Only auto-finalize for Circle/Rect via drag. 
+    // Line (Polyline) requires explicit clicks or dblclick to finalize.
+    if (drawingState.current.step === 1 && drawingState.current.isDragging && newShape && activeTool !== 'line') {
+      finalizeShape();
     }
-  }, [newShape, sketches, setSketches, pushToHistory]);
+  }, [newShape, finalizeShape, activeTool]);
+
+  const handleDblClick = useCallback((e) => {
+     if (drawingState.current.step === 1 && activeTool === 'line') {
+        finalizeShape();
+     }
+  }, [activeTool, finalizeShape]);
 
   return (
-    <Group onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp}>
+    <Group onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onDblClick={handleDblClick}>
       <Circle radius={10000} fill="rgba(0,0,0,0)" />
       {sketches.map(s => {
         const baseColor = isFullyConstrained(s, dimensions, fixedPoints) ? '#aaaaaa' : 'white';
-        const color = s.construction ? '#666' : baseColor;
+        const opColor = s.op === 'subtract' ? '#FF5252' : baseColor;
+        const color = s.construction ? '#666' : opColor;
         const dash = s.construction ? [5/scale, 5/scale] : null;
         return (
         <Group key={s.id}>

@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
 import axios from 'axios';
+import { 
+  Plus, 
+  Trash2, 
+  Cpu, 
+  Layers, 
+  Download, 
+  FileArchive, 
+  ShieldCheck, 
+  ArrowRight,
+  ChevronRight,
+  Settings
+} from 'lucide-react';
 
 const Hardware = ({ globals }) => {
   const { evaluationCases, results, fieldsets, setFieldsets, sensors, geometry, physics } = globals;
@@ -61,7 +73,6 @@ const Hardware = ({ globals }) => {
       return;
     }
 
-    // Check if counts match
     const counts = activeLoads.map(l => groups[l].length);
     const allSame = counts.every(c => c === counts[0]);
     if (!allSame) {
@@ -86,13 +97,7 @@ const Hardware = ({ globals }) => {
     setIsExporting(true);
     try {
       const sensor = sensors[sensorIndex];
-      const payload = {
-        sensor,
-        fieldsets,
-        results,
-        geometry,
-        physics
-      };
+      const payload = { sensor, fieldsets, results, geometry, physics };
       const res = await axios.post('/api/export_sick', payload, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
@@ -123,67 +128,81 @@ const Hardware = ({ globals }) => {
   };
 
   return (
-    <div className="hardware-container" style={{ display: 'flex', height: '100%', background: '#111' }}>
+    <div className="hardware-container">
       
       {/* --- Left Panes: Fieldsets --- */}
-      <div style={{ flex: '0 0 22%', borderRight: '1px solid #333', display: 'flex', flexDirection: 'column', minWidth: '250px' }}>
-        <div className="panel-header" style={{ padding: '10px', background: '#1a1a1a', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontWeight: 'bold', color: '#aaa', fontSize: '0.8rem' }}>FIELDSETS</span>
-          <button onClick={addFs} className="btn-blue" style={{ padding: '2px 8px', fontSize: '0.7rem' }}>+ Add Set</button>
+      <div className="hardware-pane" style={{ flex: '0 0 280px' }}>
+        <div className="hardware-header">
+          <h3>Fieldsets</h3>
+          <button onClick={addFs} className="icon-btn" title="Add New Set">
+            <Plus size={18} />
+          </button>
         </div>
         
-        <div style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="hardware-list">
           {fieldsets.map((fs, i) => (
-            <div key={i} onClick={() => setSelectedFsIndex(i)} 
-                 style={{ padding: '10px', cursor: 'pointer', borderBottom: '1px solid #222', background: selectedFsIndex === i ? '#1a3a5c' : 'transparent', display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div key={i} className={`hw-item ${selectedFsIndex === i ? 'selected' : ''}`} onClick={() => setSelectedFsIndex(i)}>
+              <Layers size={14} style={{ color: selectedFsIndex === i ? '#2196F3' : '#666' }} />
               <input value={fs.name} onChange={(e) => updateFsName(i, e.target.value)} 
                      onClick={(e) => e.stopPropagation()}
-                     style={{ background: 'transparent', border: 'none', color: 'white', flex: 1, outline: 'none' }} />
-              <button onClick={(e) => { e.stopPropagation(); delFs(i); }} style={{ background: 'transparent', border: 'none', color: '#ff5252', cursor: 'pointer' }}>✕</button>
+                     className="hw-input"
+                     style={{ background: 'transparent', border: 'none', padding: 0 }} />
+              <button onClick={(e) => { e.stopPropagation(); delFs(i); }} className="icon-btn red">
+                <Trash2 size={14} />
+              </button>
             </div>
           ))}
         </div>
 
-        <div style={{ padding: '10px', borderTop: '1px solid #333' }}>
-          <button onClick={autoGen} className="btn-teal" style={{ width: '100%', padding: '8px', fontWeight: 'bold' }}>Auto-Gen Fieldsets</button>
+        <div style={{ padding: '16px', borderTop: '2px solid #333' }}>
+          <button onClick={autoGen} className="primary-btn" style={{ width: '100%', padding: '10px' }}>
+            <Settings size={16} /> Auto-Gen Fieldsets
+          </button>
         </div>
       </div>
 
       {/* --- Center Pane: Fields in Set --- */}
-      <div style={{ flex: '1', display: 'flex', flexDirection: 'column', borderRight: '1px solid #333', minWidth: '400px' }}>
+      <div className="hardware-pane" style={{ flex: 1, borderLeft: 'none' }}>
         {selectedFsIndex !== null ? (
           <>
-            <div className="panel-header" style={{ padding: '10px', background: '#1a1a1a', borderBottom: '1px solid #333', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ fontWeight: 'bold', color: '#aaa', fontSize: '0.8rem' }}>FIELDS IN {fieldsets[selectedFsIndex].name.toUpperCase()}</span>
-              <button onClick={() => addField(selectedFsIndex)} className="btn-blue" style={{ padding: '2px 8px', fontSize: '0.7rem' }}>+ Add Field</button>
+            <div className="hardware-header">
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ color: '#555', fontSize: '0.8rem' }}>FIELDSET /</span>
+                <span style={{ fontWeight: 'bold' }}>{fieldsets[selectedFsIndex].name}</span>
+              </div>
+              <button onClick={() => addField(selectedFsIndex)} className="primary-btn" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>
+                <Plus size={14} /> Add Field
+              </button>
             </div>
             
-            <div style={{ flex: 1, overflowY: 'auto', padding: '10px' }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+              <table className="hw-table">
                 <thead>
-                  <tr style={{ textAlign: 'left', color: '#777', borderBottom: '1px solid #333' }}>
-                    <th style={{ padding: '8px' }}>Field Name</th>
-                    <th style={{ padding: '8px' }}>Source Case</th>
-                    <th style={{ padding: '8px', width: '40px' }}></th>
+                  <tr>
+                    <th>Field Name</th>
+                    <th>Source Case</th>
+                    <th style={{ width: 50 }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {fieldsets[selectedFsIndex].fields.map((f, i) => (
-                    <tr key={i} style={{ borderBottom: '1px solid #222' }}>
-                      <td style={{ padding: '5px' }}>
+                    <tr key={i}>
+                      <td>
                         <input value={f.name} onChange={(e) => updateField(selectedFsIndex, i, 'name', e.target.value)}
-                               style={{ background: '#222', border: '1px solid #444', color: 'white', padding: '4px', width: '90%' }} />
+                               className="hw-input" />
                       </td>
-                      <td style={{ padding: '5px' }}>
+                      <td>
                         <select value={f.caseId} onChange={(e) => updateField(selectedFsIndex, i, 'caseId', Number(e.target.value))}
-                               style={{ background: '#222', border: '1px solid #444', color: 'white', padding: '4px', width: '100%' }}>
+                                className="hw-input">
                           {evaluationCases.map(k => (
                             <option key={k.id} value={k.id}>Case {k.id}: v={k.v} w={k.w} ({k.load})</option>
                           ))}
                         </select>
                       </td>
-                      <td style={{ padding: '5px', textAlign: 'center' }}>
-                        <button onClick={() => delField(selectedFsIndex, i)} style={{ background: 'transparent', border: 'none', color: '#ff5252', cursor: 'pointer' }}>✕</button>
+                      <td style={{ textAlign: 'right' }}>
+                        <button onClick={() => delField(selectedFsIndex, i)} className="icon-btn red">
+                          <Trash2 size={16} />
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -192,42 +211,64 @@ const Hardware = ({ globals }) => {
             </div>
           </>
         ) : (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#555' }}>
-            Select a fieldset to manage its fields.
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#444' }}>
+            <ShieldCheck size={48} style={{ marginBottom: 15, opacity: 0.2 }} />
+            <p>Select a fieldset from the left to manage configuration.</p>
           </div>
         )}
       </div>
 
       {/* --- Right Pane: Export Actions --- */}
-      <div style={{ flex: '0 0 22%', display: 'flex', flexDirection: 'column', padding: '15px', minWidth: '250px' }}>
-        <h3 style={{ fontSize: '0.9rem', color: '#aaa', margin: '0 0 15px 0' }}>HARDWARE EXPORT</h3>
+      <div className="hardware-pane" style={{ flex: '0 0 320px', borderRight: 'none', background: '#0a0a0a' }}>
+        <div className="hardware-header" style={{ background: '#0d0d0d' }}>
+          <h3>Hardware Export</h3>
+        </div>
         
-        {sensors.length === 0 ? (
-          <div style={{ color: '#666', fontSize: '0.8rem' }}>No LiDARs configured in Editor tab.</div>
-        ) : (
-          sensors.map((s, i) => (
-            <div key={i} style={{ background: '#1a1a1a', border: '1px solid #333', borderRadius: '4px', padding: '12px', marginBottom: '15px' }}>
-              <div style={{ fontWeight: 'bold', color: '#2196F3', marginBottom: '8px' }}>{s.name}</div>
-              <div style={{ fontSize: '0.75rem', color: '#777', marginBottom: '12px' }}>Model: {s.model}</div>
-              
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button onClick={() => handleExportSick(i)} disabled={isExporting} 
-                        className="btn-blue" style={{ flex: 1, padding: '6px', fontSize: '0.75rem' }}>
-                  {s.model.includes('Sick') ? 'Export SDXML' : 'Export XML'}
-                </button>
-                <button onClick={() => handleExportLeuze(i)} disabled={isExporting}
-                        className="btn-purple" style={{ flex: 1, padding: '6px', fontSize: '0.75rem' }}>
-                  Export CSVs
-                </button>
-              </div>
+        <div style={{ padding: '20px', overflowY: 'auto' }}>
+          {sensors.length === 0 ? (
+            <div style={{ color: '#444', textAlign: 'center', marginTop: 40 }}>
+              <Cpu size={32} style={{ marginBottom: 16, opacity: 0.3 }} />
+              <p style={{ fontSize: '0.8rem' }}>No LiDARs configured in Editor tab.</p>
             </div>
-          ))
-        )}
+          ) : (
+            sensors.map((s, i) => (
+              <div key={i} className="hw-export-card">
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <div>
+                    <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#2196F3' }}>{s.name}</div>
+                    <div style={{ fontSize: '0.7rem', color: '#666', marginTop: 2 }}>{s.model}</div>
+                  </div>
+                  <Cpu size={20} color="#333" />
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <button onClick={() => handleExportSick(i)} disabled={isExporting} className="primary-btn" style={{ justifyContent: 'space-between' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <Download size={16} />
+                      <span>{s.model.includes('Sick') ? 'Export SDXML' : 'Export XML'}</span>
+                    </div>
+                    <ChevronRight size={14} opacity={0.5} />
+                  </button>
+                  <button onClick={() => handleExportLeuze(i)} disabled={isExporting} className="secondary-btn" style={{ justifyContent: 'space-between', background: '#333' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <FileArchive size={16} />
+                      <span>Export CSV ZIP</span>
+                    </div>
+                    <ChevronRight size={14} opacity={0.5} />
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
 
-        <div style={{ flex: 1 }} />
-        <div style={{ fontSize: '0.7rem', color: '#444' }}>
-          * SICK export requires SDXML format for Safety Designer.
-          * Leuze export generates a ZIP containing coordinate CSVs.
+          <div style={{ marginTop: 20, padding: 15, background: 'rgba(255,255,0,0.05)', borderRadius: 8, border: '1px solid rgba(255,255,0,0.1)' }}>
+            <div style={{ fontSize: '0.75rem', color: '#998a00', fontWeight: 'bold', marginBottom: 5 }}>Export Notes</div>
+            <ul style={{ margin: 0, paddingLeft: 15, fontSize: '0.65rem', color: '#777', lineHeight: '1.4' }}>
+              <li>SICK requires SDXML for Safety Designer.</li>
+              <li>Leuze exports contain raw coordinate CSVs.</li>
+              <li>Ensure all cases are calculated before export.</li>
+            </ul>
+          </div>
         </div>
       </div>
 

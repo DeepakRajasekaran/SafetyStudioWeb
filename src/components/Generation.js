@@ -1,16 +1,50 @@
 import React, { useState, useRef } from 'react';
-import { Plus, Trash2, FileUp } from 'lucide-react';
+import { Plus, Trash2, FileUp, Settings2, Activity, Database, Check, History, Layers, Sliders, Info, Zap, Calculator, Trash, Minus } from 'lucide-react';
 import axios from 'axios';
 
+const ModernInput = ({ value, onChange, placeholder, disabled, style = {} }) => (
+  <input 
+    type="text" 
+    className="modern-input"
+    value={value} 
+    onChange={onChange}
+    placeholder={placeholder}
+    disabled={disabled}
+    style={{
+      background: 'rgba(0,0,0,0.2)',
+      border: '1px solid rgba(255,255,255,0.1)',
+      color: '#fff',
+      padding: '8px 12px',
+      borderRadius: '8px',
+      fontSize: '0.85rem',
+      width: '100%',
+      textAlign: 'center',
+      transition: 'all 0.2s',
+      ...style
+    }}
+  />
+);
+
+const SectionHeader = ({ icon: Icon, title, subtitle }) => (
+  <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
+    <div style={{ padding: 10, background: 'rgba(0,229,255,0.1)', borderRadius: 12, display: 'flex' }}>
+      <Icon size={20} color="#00e5ff" />
+    </div>
+    <div>
+      <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>{title}</h3>
+      <p style={{ margin: 0, fontSize: '0.7rem', color: '#666', fontWeight: 500 }}>{subtitle}</p>
+    </div>
+  </div>
+);
+
 const Generation = ({ globals }) => {
-  const { physics, setPhysics, evaluationCases, setEvaluationCases, genConfig, setGenConfig, genSync: sync, setGenSync: setSync, geometry } = globals;
+  const { physics, setPhysics, evaluationCases, setEvaluationCases, genConfig, setGenConfig, genSync: sync, setGenSync: setSync, geometry, results, setResults } = globals;
 
   const fileInputRef = useRef(null);
   const [activeCaseId, setActiveCaseId] = useState(null);
 
   // Handlers for Physics Config Grid
   const handlePhysicsChange = (load, key, value) => {
-    // If it's a number-like field and the value is empty string, allow it in state for UX
     setPhysics(prev => ({
       ...prev,
       [load]: { ...prev[load], [key]: value }
@@ -21,12 +55,8 @@ const Generation = ({ globals }) => {
     setGenConfig(prev => {
       const next = { ...prev };
       next[load] = { ...prev[load], [key]: value };
-      
-      // If sync is on for checkboxes, apply to all loads
       if (sync && typeof value === 'boolean' && key !== 'enabled') {
-        Object.keys(next).forEach(l => {
-          next[l][key] = value;
-        });
+        Object.keys(next).forEach(l => { next[l][key] = value; });
       }
       return next;
     });
@@ -40,14 +70,13 @@ const Generation = ({ globals }) => {
       const c = genConfig[load];
       if (!c.enabled) return;
 
-      let rem = c.cnt;
-      
-      // In-Place bounds
+      let rem = parseInt(c.cnt) || 0;
       if (c.ip && rem > 0) {
-        newCases.push({ id: idCounter++, load, v: 0.0, w: c.w, custom_dxf: null });
+        const ipW = parseFloat(c.w) || 0;
+        newCases.push({ id: idCounter++, load, v: 0.0, w: ipW, custom_dxf: null });
         rem--;
         if (rem > 0) {
-          newCases.push({ id: idCounter++, load, v: 0.0, w: -c.w, custom_dxf: null });
+          newCases.push({ id: idCounter++, load, v: 0.0, w: -ipW, custom_dxf: null });
           rem--;
         }
       }
@@ -56,15 +85,18 @@ const Generation = ({ globals }) => {
       if (modesPerLevel === 0 || rem <= 0) return;
 
       const steps = Math.ceil(rem / modesPerLevel);
-      
-      const vRange = c.v - c.minV;
-      const vStep = steps > 1 ? vRange / (steps - 1) : 0;
+      const vLimit = parseFloat(c.v) || 0;
+      const vMin   = parseFloat(c.minV) || 0;
+      const vW     = parseFloat(c.w) || 0;
+      const vRev   = parseFloat(c.revV) || 0;
 
-      const revRange = c.revV - c.minV;
+      const vRange = vLimit - vMin;
+      const vStep = steps > 1 ? vRange / (steps - 1) : 0;
+      const revRange = vRev - vMin;
       const revStep = steps > 1 ? revRange / (steps - 1) : 0;
 
-      let currV = c.minV;
-      let currRevV = c.minV;
+      let currV = vMin;
+      let currRevV = vMin;
 
       for (let i = 0; i < steps; i++) {
         if (c.fwd && rem > 0) {
@@ -76,27 +108,39 @@ const Generation = ({ globals }) => {
           }
         }
         if (c.turn && rem > 0) {
-          newCases.push({ id: idCounter++, load, v: parseFloat(currV.toFixed(2)), w: parseFloat(c.w.toFixed(2)), custom_dxf: null, type: 'std' });
+          const wVal = parseFloat(vW.toFixed(2));
+          newCases.push({ id: idCounter++, load, v: parseFloat(currV.toFixed(2)), w: wVal, custom_dxf: null, type: 'std' });
           rem--;
           if (c.rev && rem > 0) {
-            newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: parseFloat(c.w.toFixed(2)), custom_dxf: null, type: 'std' });
+            newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: wVal, custom_dxf: null, type: 'std' });
             rem--;
           }
         }
         if (c.turn && rem > 0) {
-          newCases.push({ id: idCounter++, load, v: parseFloat(currV.toFixed(2)), w: parseFloat(-c.w.toFixed(2)), custom_dxf: null, type: 'std' });
+          const wVal = parseFloat((-vW).toFixed(2));
+          newCases.push({ id: idCounter++, load, v: parseFloat(currV.toFixed(2)), w: wVal, custom_dxf: null, type: 'std' });
           rem--;
           if (c.rev && rem > 0) {
-            newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: parseFloat(-c.w.toFixed(2)), custom_dxf: null, type: 'std' });
+            newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: wVal, custom_dxf: null, type: 'std' });
             rem--;
           }
         }
-        currV += vStep;
-        currRevV += revStep;
+        currV += vStep; currRevV += revStep;
       }
     });
 
-    setEvaluationCases(newCases);
+    // Sort logically: Load Group -> Linear Velocity (v) -> Angular Velocity (w)
+    newCases.sort((a, b) => {
+      const loadOrder = { 'NoLoad': 0, 'Load1': 1, 'Load2': 2 };
+      if (loadOrder[a.load] !== loadOrder[b.load]) return (loadOrder[a.load] ?? 3) - (loadOrder[b.load] ?? 3);
+      if (Math.abs(a.v - b.v) > 0.001) return a.v - b.v;
+      return a.w - b.w;
+    });
+
+    // Re-assign IDs based on sorted order
+    const finalCases = newCases.map((c, i) => ({ ...c, id: i + 1 }));
+
+    setEvaluationCases(finalCases);
   };
 
   const handleAddMiscCase = () => {
@@ -113,14 +157,10 @@ const Generation = ({ globals }) => {
       return { ...k, id: newId };
     });
 
-    // 3. Migrate the results state to match new IDs
-    const { results, setResults } = globals;
     const newResults = {};
     Object.keys(results).forEach(oldIdKey => {
       const oldId = parseInt(oldIdKey);
-      if (idMap[oldId]) {
-        newResults[idMap[oldId]] = results[oldId];
-      }
+      if (idMap[oldId]) newResults[idMap[oldId]] = results[oldId];
     });
 
     setEvaluationCases(reindexed);
@@ -147,273 +187,347 @@ const Generation = ({ globals }) => {
   const handleFileChange = async (e) => {
     const file = e.target.files[0];
     if (!file || activeCaseId === null) return;
-
     const formData = new FormData();
     formData.append('file', file);
-
     try {
       const res = await axios.post('/api/upload_dxf', formData);
       if (res.data.wkt) {
         setEvaluationCases(evaluationCases.map(k => k.id === activeCaseId ? {
-          ...k,
-          custom_dxf_name: res.data.filename,
-          custom_dxf: res.data.wkt
+          ...k, custom_dxf_name: res.data.filename, custom_dxf: res.data.wkt
         } : k));
-        alert('Custom DXF uploaded for Case #' + activeCaseId);
       }
     } catch (err) {
       alert('Upload failed: ' + (err.response?.data?.error || err.message));
     } finally {
-      e.target.value = '';
-      setActiveCaseId(null);
+      e.target.value = ''; setActiveCaseId(null);
     }
   };
 
+
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'row', gap: '20px', padding: '20px', boxSizing: 'border-box', height: '100%', width: '100%', overflow: 'hidden' }}>
-      
-      {/* Column 1: Configs */}
-      <div style={{ flex: '1 0 320px', display: 'flex', flexDirection: 'column', gap: '20px', overflowY: 'auto' }}>
-        {/* 1. Physics Configuration Grid */}
-        <div className="settings-panel">
-          <h2 className="panel-title" style={{ fontSize: '1.2rem', marginBottom: '10px' }}>Physics Configuration</h2>
-          <div style={{ background: '#111', padding: '10px', borderRadius: '5px', marginBottom: 15, fontFamily: 'monospace', color: 'cyan', textAlign: 'center' }}>
-            D = v*Tr + v²/2a + Ds
-          </div>
-          
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #444' }}>
-                <th style={{ textAlign: 'left', padding: '5px' }}>Param</th>
-                <th style={{ padding: '5px' }}>NoLoad</th>
-                <th style={{ padding: '5px' }}><input type="checkbox" checked={physics.Load1.enabled} disabled={!geometry.Load1} onChange={e => handlePhysicsChange('Load1', 'enabled', e.target.checked)}/> Load1</th>
-                <th style={{ padding: '5px' }}><input type="checkbox" checked={physics.Load2.enabled} disabled={!geometry.Load2} onChange={e => handlePhysicsChange('Load2', 'enabled', e.target.checked)}/> Load2</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { lbl: 'Tr (s)', k: 'tr', type: 'number', step: 0.05 },
-                { lbl: 'a (m/s²)', k: 'ac', type: 'number', step: 0.1 },
-                { lbl: 'Ds (m)', k: 'ds', type: 'number', step: 0.05 },
-                { lbl: 'Pad (m)', k: 'pad', type: 'number', step: 0.01 },
-                { lbl: 'Smooth (m)', k: 'smooth', type: 'number', step: 0.01 },
-                { lbl: 'Lateral Scale', k: 'lat_scale', type: 'number', step: 0.1 },
-                { lbl: 'Shadow', k: 'shadow', type: 'checkbox' },
-                { lbl: 'Inc Shape', k: 'include_load', type: 'checkbox' },
-                { lbl: 'Patch Notches', k: 'patch_notch', type: 'checkbox' },
-              ].map(row => (
-                <tr key={row.k}>
-                  <td style={{ textAlign: 'left', padding: '5px', borderBottom: '1px solid #333' }}>{row.lbl}</td>
-                  {['NoLoad', 'Load1', 'Load2'].map(load => (
-                    <td key={load} style={{ padding: '5px', borderBottom: '1px solid #333' }}>
-                      {row.type === 'checkbox' ? (
-                        ((row.k === 'shadow' || row.k === 'include_load') && load === 'NoLoad') ? (
-                          <span style={{ color: '#444', fontSize: '0.7rem' }}>N/A</span>
-                        ) : (
-                          <input 
-                            type="checkbox"
-                            checked={physics[load][row.k]} 
-                            onChange={e => handlePhysicsChange(load, row.k, e.target.checked)}
-                            disabled={load !== 'NoLoad' && !physics[load].enabled}
-                            style={{ opacity: (load!=='NoLoad' && !physics[load].enabled) ? 0.3 : 1 }}
-                          />
-                        )
-                      ) : (
-                        <input 
-                          type="text" className="dark-input" 
-                          value={physics[load][row.k]} 
-                          onChange={e => handlePhysicsChange(load, row.k, e.target.value)}
-                          onBlur={e => {
-                             if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
-                                handlePhysicsChange(load, row.k, 0);
-                             } else {
-                                handlePhysicsChange(load, row.k, parseFloat(e.target.value));
-                             }
-                          }}
-                          disabled={load !== 'NoLoad' && !physics[load].enabled}
-                          style={{ opacity: (load!=='NoLoad' && !physics[load].enabled) ? 0.3 : 1, width: '100%' }}
-                        />
-                      )}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* 2. Evaluation Case Generation */}
-        <div className="settings-panel">
-          <h2 className="panel-title" style={{ fontSize: '1.2rem', marginBottom: '10px' }}>Evaluation Case Generation</h2>
-          
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'center' }}>
-            <thead>
-              <tr style={{ borderBottom: '1px solid #444' }}>
-                <th style={{ textAlign: 'left', padding: '5px' }}>Param</th>
-                <th style={{ padding: '5px' }}>NoLoad</th>
-                <th style={{ padding: '5px' }}><input type="checkbox" checked={genConfig.Load1.enabled} disabled={!geometry.Load1} onChange={e => handleGenConfigChange('Load1', 'enabled', e.target.checked)}/> Load1</th>
-                <th style={{ padding: '5px' }}><input type="checkbox" checked={genConfig.Load2.enabled} disabled={!geometry.Load2} onChange={e => handleGenConfigChange('Load2', 'enabled', e.target.checked)}/> Load2</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[
-                { lbl: 'Count', k: 'cnt', type: 'number' },
-                { lbl: 'Max Fwd (m/s)', k: 'v', type: 'number' },
-                { lbl: 'Max Rev (m/s)', k: 'revV', type: 'number' },
-                { lbl: 'Min V (m/s)', k: 'minV', type: 'number' },
-                { lbl: 'Max W (rad/s)', k: 'w', type: 'number' },
-              ].map(row => (
-                <tr key={row.k}>
-                  <td style={{ textAlign: 'left', padding: '5px', borderBottom: '1px solid #333' }}>{row.lbl}</td>
-                  {['NoLoad', 'Load1', 'Load2'].map(load => (
-                    <td key={load} style={{ padding: '5px', borderBottom: '1px solid #333' }}>
-                      <input 
-                        type="text" className="dark-input" 
-                        id={`gen-${load}-${row.k}`}
-                        value={genConfig[load][row.k]} 
-                        onChange={e => handleGenConfigChange(load, row.k, e.target.value)}
-                        onBlur={e => {
-                           if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
-                              handleGenConfigChange(load, row.k, 0);
-                           } else {
-                              handleGenConfigChange(load, row.k, parseFloat(e.target.value));
-                           }
-                        }}
-                        disabled={load !== 'NoLoad' && !genConfig[load].enabled}
-                        style={{ opacity: (load!=='NoLoad' && !genConfig[load].enabled) ? 0.3 : 1, width: '100%', background: '#222', border: 'none', color: 'white', textAlign: 'center' }}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-              <tr><td colSpan="4"><hr style={{borderColor: '#444', margin: '10px 0'}}/></td></tr>
-              <tr>
-                <td style={{ textAlign: 'left', fontWeight: 'bold' }}>Motions</td>
-                <td colSpan="3" style={{ textAlign: 'right' }}>
-                  <label><input type="checkbox" checked={sync} onChange={e => setSync(e.target.checked)}/> Sync Columns</label>
-                </td>
-              </tr>
-              {[
-                { lbl: 'Fwd Linear', k: 'fwd' },
-                { lbl: 'Curve Turn', k: 'turn' },
-                { lbl: 'Inplace', k: 'ip' },
-                { lbl: 'Reverse', k: 'rev' },
-              ].map(row => (
-                <tr key={row.k}>
-                  <td style={{ textAlign: 'left', padding: '5px', borderBottom: '1px solid #333' }}>{row.lbl}</td>
-                  {['NoLoad', 'Load1', 'Load2'].map(load => (
-                    <td key={load} style={{ padding: '5px', borderBottom: '1px solid #333' }}>
-                      <input 
-                        type="checkbox"
-                        checked={genConfig[load][row.k]} 
-                        onChange={e => handleGenConfigChange(load, row.k, e.target.checked)}
-                        disabled={load !== 'NoLoad' && !genConfig[load].enabled}
-                      />
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-
-          <button className="primary-btn" onClick={handlePopulateTable} style={{ width: '100%', marginTop: '15px', padding: '10px', backgroundColor: '#223A5E' }}>
-            Auto-Populate Evaluation Table
-          </button>
-          <button className="primary-btn" onClick={handleAddMiscCase} style={{ width: '100%', marginTop: '10px', padding: '10px', backgroundColor: '#2a4a5c' }}>
-            + Add Misc Case
-          </button>
-        </div>
-      </div>
-
-      {/* Column 2: Evaluation Cases */}
-      <div style={{ flex: 2.5, display: 'flex', flexDirection: 'column', overflowY: 'auto' }}>
-        <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept=".dxf" />
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: '#0a0a0a', overflow: 'hidden' }}>
+      <div style={{ display: 'flex', gap: 24, padding: 24, boxSizing: 'border-box', height: '100%', width: '100%', overflow: 'hidden' }}>
         
-        <div className="settings-panel" style={{ flex: 1 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 className="panel-title" style={{ fontSize: '1.5rem', margin: 0 }}>Evaluation Cases Table</h2>
-            <div style={{ display: 'flex', gap: 10 }}>
-              {/* Optional secondary controls if needed */}
+        {/* Left Config Panel */}
+        <div style={{ flex: '0 0 450px', display: 'flex', flexDirection: 'column', gap: 24, overflowY: 'auto', paddingRight: 4 }}>
+          
+          {/* Physics Config Card */}
+          <div className="glass-card" style={{ padding: 24, borderRadius: 20, background: 'rgba(25,25,25,0.4)', border: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)' }}>
+            <SectionHeader icon={Activity} title="PHYSICS ENGINE" subtitle="Calculated Stopping Distance parameters" />
+            
+            <div style={{ background: 'rgba(0,229,255,0.05)', padding: '12px', borderRadius: 12, marginBottom: 20, fontFamily: 'monospace', color: '#00e5ff', fontSize: '0.75rem', textAlign: 'center', border: '1px dashed rgba(0,229,255,0.2)' }}>
+              D = v·Tᵣ + v²/2a + Dₛ
+            </div>
+
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 6px' }}>
+              <thead>
+                <tr style={{ fontSize: '0.65rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  <th style={{ textAlign: 'left', fontWeight: 800, paddingBottom: 8 }}>Param</th>
+                  <th style={{ textAlign: 'center', paddingBottom: 8 }}>No Load</th>
+                  <th style={{ textAlign: 'center', paddingBottom: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={physics.Load1.enabled} disabled={!geometry.Load1}
+                        onChange={e => handlePhysicsChange('Load1', 'enabled', e.target.checked)}
+                        style={{ accentColor: '#00e5ff' }} />
+                      Load 1
+                    </label>
+                  </th>
+                  <th style={{ textAlign: 'center', paddingBottom: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={physics.Load2.enabled} disabled={!geometry.Load2}
+                        onChange={e => handlePhysicsChange('Load2', 'enabled', e.target.checked)}
+                        style={{ accentColor: '#00e5ff' }} />
+                      Load 2
+                    </label>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Numeric rows */}
+                {[
+                  { lbl: 'Reaction Tr (s)', k: 'tr' },
+                  { lbl: 'Decel a (m/s²)', k: 'ac' },
+                  { lbl: 'Safety Ds (m)', k: 'ds' },
+                  { lbl: 'Pad Offset (m)', k: 'pad' },
+                  { lbl: 'Smooth (m)', k: 'smooth' },
+                  { lbl: 'Lateral Scale', k: 'lat_scale' },
+                ].map(row => (
+                  <tr key={row.k}>
+                    <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>{row.lbl}</td>
+                    {['NoLoad', 'Load1', 'Load2'].map(load => (
+                      <td key={load} style={{ padding: '0 4px' }}>
+                        <ModernInput
+                          value={physics[load][row.k]}
+                          onChange={e => handlePhysicsChange(load, row.k, e.target.value)}
+                          disabled={load !== 'NoLoad' && !physics[load].enabled}
+                          style={{ opacity: (load !== 'NoLoad' && !physics[load].enabled) ? 0.2 : 1 }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {/* Divider */}
+                <tr><td colSpan="4"><div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', margin: '6px 0' }} /></td></tr>
+                {/* Checkbox rows */}
+                {[
+                  { lbl: 'Shadow Zones', k: 'shadow', naFor: 'NoLoad' },
+                  { lbl: 'Include Load Shape', k: 'include_load', naFor: 'NoLoad' },
+                  { lbl: 'Patch Notches', k: 'patch_notch', naFor: null },
+                ].map(row => (
+                  <tr key={row.k}>
+                    <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>{row.lbl}</td>
+                    {['NoLoad', 'Load1', 'Load2'].map(load => {
+                      const isNA = row.naFor && load === row.naFor;
+                      const disabled = isNA || (load !== 'NoLoad' && !physics[load].enabled);
+                      return (
+                        <td key={load} style={{ textAlign: 'center', padding: '4px' }}>
+                          {isNA ? (
+                            <span style={{ color: '#333', fontSize: '0.65rem' }}>N/A</span>
+                          ) : (
+                            <input
+                              type="checkbox"
+                              checked={physics[load][row.k]}
+                              onChange={e => handlePhysicsChange(load, row.k, e.target.checked)}
+                              disabled={disabled}
+                              style={{ accentColor: '#00e5ff', width: 14, height: 14, opacity: disabled ? 0.2 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                            />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Matrix Generator Card */}
+          <div className="glass-card" style={{ padding: 24, borderRadius: 20, background: 'rgba(25,25,25,0.4)', border: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)' }}>
+            <SectionHeader icon={Sliders} title="MATRIX GENERATOR" subtitle="Auto-populate evaluation cases" />
+            
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <div style={{ fontSize: '0.7rem', color: '#555', fontWeight: 700 }}>SYNC COLUMNS</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: sync ? '#00e5ff' : '#666', cursor: 'pointer', transition: 'all 0.2s' }}>
+                <input type="checkbox" checked={sync} onChange={e => setSync(e.target.checked)}
+                  style={{ accentColor: '#00e5ff', width: 14, height: 14, cursor: 'pointer' }} />
+                Sync All
+              </label>
+            </div>
+
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 4px' }}>
+              <thead>
+                <tr style={{ fontSize: '0.65rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  <th style={{ textAlign: 'left', paddingBottom: 8 }}>Param</th>
+                  <th style={{ textAlign: 'center', paddingBottom: 8 }}>No Load</th>
+                  <th style={{ textAlign: 'center', paddingBottom: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={genConfig.Load1.enabled} disabled={!geometry.Load1}
+                        onChange={e => handleGenConfigChange('Load1', 'enabled', e.target.checked)}
+                        style={{ accentColor: '#00e5ff' }} />
+                      Load 1
+                    </label>
+                  </th>
+                  <th style={{ textAlign: 'center', paddingBottom: 8 }}>
+                    <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={genConfig.Load2.enabled} disabled={!geometry.Load2}
+                        onChange={e => handleGenConfigChange('Load2', 'enabled', e.target.checked)}
+                        style={{ accentColor: '#00e5ff' }} />
+                      Load 2
+                    </label>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {/* Numeric params */}
+                {[
+                  { lbl: 'Case Count', k: 'cnt', icon: Database },
+                  { lbl: 'Max Fwd v (m/s)', k: 'v', icon: Zap },
+                  { lbl: 'Max Rev v (m/s)', k: 'revV', icon: History },
+                  { lbl: 'Min v (m/s)', k: 'minV', icon: Minus },
+                  { lbl: 'Max Ang w (rad/s)', k: 'w', icon: Settings2 },
+                ].map(row => (
+                  <tr key={row.k}>
+                    <td style={{ color: '#aaa', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 6, height: 36 }}>
+                      <row.icon size={12} color="#444" /> {row.lbl}
+                    </td>
+                    {['NoLoad', 'Load1', 'Load2'].map(load => (
+                      <td key={load} style={{ padding: '0 4px' }}>
+                        <ModernInput
+                          value={genConfig[load][row.k]}
+                          onChange={e => handleGenConfigChange(load, row.k, e.target.value)}
+                          disabled={load !== 'NoLoad' && !genConfig[load].enabled}
+                          style={{ opacity: (load !== 'NoLoad' && !genConfig[load].enabled) ? 0.2 : 1 }}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+                {/* Divider */}
+                <tr><td colSpan="4"><div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', margin: '6px 0' }} /></td></tr>
+                <tr>
+                  <td colSpan="4" style={{ fontSize: '0.65rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em', paddingBottom: 4 }}>Motion Types</td>
+                </tr>
+                {/* Motion checkboxes */}
+                {[
+                  { lbl: 'Forward Linear', k: 'fwd' },
+                  { lbl: 'Curve / Turn', k: 'turn' },
+                  { lbl: 'In-place Rotate', k: 'ip' },
+                  { lbl: 'Reverse', k: 'rev' },
+                ].map(row => (
+                  <tr key={row.k}>
+                    <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>{row.lbl}</td>
+                    {['NoLoad', 'Load1', 'Load2'].map(load => {
+                      const disabled = load !== 'NoLoad' && !genConfig[load].enabled;
+                      return (
+                        <td key={load} style={{ textAlign: 'center', padding: '4px' }}>
+                          <input
+                            type="checkbox"
+                            checked={genConfig[load][row.k]}
+                            onChange={e => handleGenConfigChange(load, row.k, e.target.checked)}
+                            disabled={disabled}
+                            style={{ accentColor: '#00e5ff', width: 14, height: 14, opacity: disabled ? 0.2 : 1, cursor: disabled ? 'not-allowed' : 'pointer' }}
+                          />
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+
+            <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+               <button onClick={handlePopulateTable} className="action-btn-primary" style={{ gridColumn: 'span 2' }}>
+                 <Calculator size={16} /> GENERATE ALL CASES
+               </button>
+               <button onClick={handleAddMiscCase} className="action-btn-secondary">
+                 <Plus size={16} /> ADD MISC
+               </button>
+               <button onClick={() => setEvaluationCases([])} className="action-btn-danger">
+                 <Trash2 size={16} /> CLEAR
+               </button>
+            </div>
+          </div>
+        </div>
+
+        {/* Right Table Panel */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: 'rgba(20,20,20,0.4)', borderRadius: 24, border: '1px solid rgba(255,255,255,0.05)', overflow: 'hidden' }}>
+          <div style={{ padding: '24px 32px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              <div style={{ padding: 10, background: 'rgba(168,85,247,0.1)', borderRadius: 12 }}>
+                <Layers size={22} color="#a855f7" />
+              </div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#fff' }}>EVALUATION MATRIX</h2>
+                <p style={{ margin: 0, fontSize: '0.75rem', color: '#666' }}>{evaluationCases.length} total cases defined</p>
+              </div>
             </div>
           </div>
 
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #444', backgroundColor: '#222' }}>
-                  <th style={{ padding: '10px' }}>ID</th>
-                  <th style={{ padding: '10px' }}>Type</th>
-                  <th style={{ padding: '10px' }}>Load</th>
-                  <th style={{ padding: '10px' }}>Vel v (m/s)</th>
-                  <th style={{ padding: '10px' }}>Ang w (rad/s)</th>
-                  <th style={{ padding: '10px' }}>Custom (Browse DXF)</th>
-                  <th style={{ padding: '10px' }}>Actions</th>
+          <div style={{ flex: 1, overflowY: 'auto', padding: '0 32px' }}>
+            <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 12px' }}>
+              <thead style={{ position: 'sticky', top: 0, background: '#0a0a0a', zIndex: 10 }}>
+                <tr style={{ fontSize: '0.65rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.15em' }}>
+                  <th style={{ padding: '16px 12px', textAlign: 'left' }}>ID</th>
+                  <th style={{ padding: '16px 12px', textAlign: 'left' }}>Type</th>
+                  <th style={{ padding: '16px 12px', textAlign: 'left' }}>Load / Payload</th>
+                  <th style={{ padding: '16px 12px', textAlign: 'center' }}>Vel (v)</th>
+                  <th style={{ padding: '16px 12px', textAlign: 'center' }}>Ang (w)</th>
+                  <th style={{ padding: '16px 12px', textAlign: 'center' }}>Custom DXF</th>
+                  <th style={{ padding: '16px 12px', textAlign: 'right' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {evaluationCases.map((k) => (
-                  <tr key={k.id} style={{ borderBottom: '1px solid #333' }}>
-                    <td style={{ padding: '10px' }}>{k.id}</td>
-                    <td style={{ padding: '10px' }}>
-                      <span style={{ fontSize: '0.7rem', background: k.type==='misc'?'#4a148c':'#1a237e', padding: '2px 6px', borderRadius: 4, textTransform: 'uppercase' }}>
-                        {k.type || 'std'}
+                  <tr key={k.id} className="case-row">
+                    <td style={{ padding: '12px', color: '#fff', fontSize: '0.85rem', fontWeight: 800, background: 'rgba(255,255,255,0.03)', borderRadius: '12px 0 0 12px' }}>#{k.id}</td>
+                    <td style={{ padding: '12px', background: 'rgba(255,255,255,0.03)' }}>
+                      <span style={{ fontSize: '0.6rem', background: k.type==='misc'?'rgba(168,85,247,0.2)':'rgba(59,130,246,0.2)', color: k.type==='misc'?'#d8b4fe':'#93c5fd', padding: '4px 8px', borderRadius: 6, fontWeight: 700, letterSpacing: '0.05em' }}>
+                        {k.type?.toUpperCase() || 'STD'}
                       </span>
                     </td>
-                    <td style={{ padding: '10px' }}>
-                      <select className="dark-input" value={k.load} onChange={e => handleCaseChange(k.id, 'load', e.target.value)}>
-                        <option value="NoLoad">NoLoad</option>
-                        <option value="Load1">Load 1</option>
-                        <option value="Load2">Load 2</option>
-                        <option value="Misc">Misc</option>
+                    <td style={{ padding: '12px', background: 'rgba(255,255,255,0.03)' }}>
+                      <select className="modern-select" value={k.load} onChange={e => handleCaseChange(k.id, 'load', e.target.value)}>
+                        <option value="NoLoad">No Load</option>
+                        <option value="Load1">Load 1 (Main)</option>
+                        <option value="Load2">Load 2 (Alt)</option>
+                        <option value="Misc">Miscellaneous</option>
                       </select>
                     </td>
-                  <td style={{ padding: '10px' }}>
-                    <input type="text" className="dark-input" value={k.v} 
-                      onChange={e => handleCaseChange(k.id, 'v', e.target.value)} 
-                      onBlur={e => {
-                        if (e.target.value === '' || isNaN(parseFloat(e.target.value))) handleCaseChange(k.id, 'v', 0);
-                        else handleCaseChange(k.id, 'v', parseFloat(e.target.value));
-                      }}
-                      style={{ width: '80px' }}
-                    />
-                  </td>
-                  <td style={{ padding: '10px' }}>
-                    <input type="text" className="dark-input" value={k.w} 
-                      onChange={e => handleCaseChange(k.id, 'w', e.target.value)} 
-                      onBlur={e => {
-                        if (e.target.value === '' || isNaN(parseFloat(e.target.value))) handleCaseChange(k.id, 'w', 0);
-                        else handleCaseChange(k.id, 'w', parseFloat(e.target.value));
-                      }}
-                      style={{ width: '80px' }}
-                    />
-                  </td>
-                  <td style={{ padding: '10px', color: '#888', cursor: 'pointer', textDecoration: 'underline' }} 
-                      onClick={() => triggerFileUpload(k.id)}>
-                     {k.custom_dxf_name ? k.custom_dxf_name : '<none>'}
-                  </td>
-                  <td style={{ padding: '10px' }}>
-                    <button className="btn-red" onClick={() => handleDeleteCase(k.id)} style={{ padding: '6px' }}>
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          {evaluationCases.length === 0 && (
-            <div style={{ padding: '20px', textAlign: 'center', color: '#888' }}>No evaluation cases defined.</div>
-          )}
+                    <td style={{ padding: '12px', background: 'rgba(255,255,255,0.03)' }}>
+                      <ModernInput value={k.v} onChange={e => handleCaseChange(k.id, 'v', e.target.value)} style={{ width: 70, margin: '0 auto' }} />
+                    </td>
+                    <td style={{ padding: '12px', background: 'rgba(255,255,255,0.03)' }}>
+                      <ModernInput value={k.w} onChange={e => handleCaseChange(k.id, 'w', e.target.value)} style={{ width: 70, margin: '0 auto' }} />
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'center', background: 'rgba(255,255,255,0.03)' }}>
+                       <button onClick={() => triggerFileUpload(k.id)} className="dxf-btn" style={{ background: k.custom_dxf ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.05)', color: k.custom_dxf ? '#4ade80' : '#888', border: '1px solid rgba(255,255,255,0.05)', padding: '6px 12px', borderRadius: 8, fontSize: '0.7rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                         <FileUp size={12} /> {k.custom_dxf_name || 'Upload'}
+                       </button>
+                    </td>
+                    <td style={{ padding: '12px', textAlign: 'right', background: 'rgba(255,255,255,0.03)', borderRadius: '0 12px 12px 0' }}>
+                      <button onClick={() => handleDeleteCase(k.id)} className="delete-icon-btn">
+                        <Trash size={16} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {evaluationCases.length === 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 80, color: '#444' }}>
+                <History size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
+                <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>No evaluation cases yet</div>
+                <div style={{ fontSize: '0.75rem', marginTop: 4 }}>Generate a matrix or add cases manually</div>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
+      <input type="file" ref={fileInputRef} onChange={handleFileChange} style={{ display: 'none' }} accept=".dxf" />
+
       <style>{`
-        .dark-input {
-          background-color: #1a1a1a;
-          border: 1px solid #444;
-          color: white;
-          padding: 6px;
-          border-radius: 4px;
-          box-sizing: border-box;
+        .modern-select {
+          background: rgba(0,0,0,0.2);
+          border: 1px solid rgba(255,255,255,0.1);
+          color: #fff;
+          padding: 8px 12px;
+          border-radius: 8px;
+          font-size: 0.8rem;
+          width: 100%;
+          outline: none;
         }
+        .action-btn-primary {
+          background: linear-gradient(135deg, #224A25 0%, #1e3a20 100%);
+          color: white; border: none; padding: 12px; border-radius: 12px;
+          font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.2); transition: all 0.2s;
+        }
+        .action-btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(34,74,37,0.3); }
+        .action-btn-secondary {
+          background: #252525; color: #fff; border: 1px solid #333; padding: 10px; border-radius: 12px;
+          font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+          transition: all 0.2s;
+        }
+        .action-btn-secondary:hover { background: #333; }
+        .action-btn-danger {
+          background: rgba(220,38,38,0.1); color: #ef4444; border: 1px solid rgba(220,38,38,0.2); padding: 10px; border-radius: 12px;
+          font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;
+          transition: all 0.2s;
+        }
+        .action-btn-danger:hover { background: rgba(220,38,38,0.2); }
+        .delete-icon-btn {
+          background: none; border: none; color: #444; cursor: pointer; padding: 8px; border-radius: 8px; transition: all 0.2s;
+        }
+        .delete-icon-btn:hover { background: rgba(239,68,68,0.1); color: #ef4444; }
+        .toggle-checkbox:before {
+          content: ''; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+          background: #fff; borderRadius: 50%; transition: all 0.3s;
+          transform: translateX(${sync ? '16px' : '0'});
+        }
+        .case-row { transition: transform 0.2s; }
+        .case-row:hover { transform: scale(1.002); }
       `}</style>
     </div>
   );
