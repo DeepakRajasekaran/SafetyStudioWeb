@@ -129,9 +129,11 @@ def export_sick():
         if devs is not None:
             d = devs.find('Device')
             if d is not None:
-                d.set('PositionX', str(int(s['x'] * 1000)))
-                d.set('PositionY', str(int(s['y'] * 1000)))
-                d.set('Rotation', str(s['mount'] % 360))
+                sx, sy = float(s.get('x', 0)), float(s.get('y', 0))
+                smount = float(s.get('mount', 0))
+                d.set('PositionX', str(int(sx * 1000)))
+                d.set('PositionY', str(int(sy * 1000)))
+                d.set('Rotation', str(smount % 360))
                 d.set('StandingUpsideDown', "true" if s.get('flipped', False) else "false")
         
         # 2. Global Geometry (Ignored regions across all used cases)
@@ -203,11 +205,12 @@ def export_leuze():
     try:
         s = data['sensor']
         results = data['results']
-        kinematics = data['kinematics']
+        # Map front-end 'evaluationCases' to local variable
+        evaluation_cases = data.get('evaluationCases', [])
         
         out_zip = io.BytesIO()
         with zipfile.ZipFile(out_zip, 'w') as z:
-            for k in kinematics:
+            for k in evaluation_cases:
                 res = results.get(str(k['id']))
                 if not res: continue
                 
@@ -217,7 +220,7 @@ def export_leuze():
                     
                     # Leuze CSV: coordinates relative to sensor in mm
                     og = np.array(lid['origin'])
-                    tf_rot = np.radians(lid['mount'])
+                    tf_rot = np.radians(float(lid.get('mount', 0)))
                     c, si = np.cos(-tf_rot), np.sin(-tf_rot)
                     R = np.array([[c, -si], [si, c]])
                     
@@ -237,7 +240,9 @@ def export_leuze():
                                 if math.hypot(x_mm, y_mm) > 1.0: # Filter center point
                                     csv_io.write(f"{x_mm:.2f};{y_mm:.2f}\n")
                     
-                    z.writestr(f"Case_{k['id']}_{k['load']}.csv", csv_io.getvalue())
+                    # Use descriptive name matching Python tool behavior
+                    safe_desc = "".join(c for c in k.get('desc', f"{k['id']}") if c.isalnum() or c in (' ','_','-','(',')','.',',')).strip()
+                    z.writestr(f"{safe_desc}.csv", csv_io.getvalue())
         
         out_zip.seek(0)
         return send_file(out_zip, mimetype="application/zip", as_attachment=True, download_name=f"{s['name']}_leuze.zip")

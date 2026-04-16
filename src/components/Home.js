@@ -1,8 +1,12 @@
 import React, { useState } from 'react';
-import { Settings, Play } from 'lucide-react';
+import { Settings, Play, X, Download, Upload } from 'lucide-react';
 
 const Home = ({ globals, setActiveTab }) => {
-  const { setSensors } = globals;
+  const { 
+    geometry, sensors, setSensors, physics, evaluationCases, results, 
+    fieldsets, setGeometry, setPhysics, setEvaluationCases, setResults, setFieldsets,
+    clearSession 
+  } = globals;
   const [model, setModel] = useState("Sick Nanoscan3Pro");
   const [count, setCount] = useState(2);
 
@@ -24,6 +28,45 @@ const Home = ({ globals, setActiveTab }) => {
     }
     setSensors(initSensors);
     setActiveTab("Editor");
+  };
+
+  const handleDownload = () => {
+    const exportData = {
+      geometry, sensors, physics, evaluationCases, fieldsets,
+      results: Object.fromEntries(
+        Object.entries(results).map(([id, data]) => [
+          id, { final_field_wkt: data?.final_field_wkt || data, load: data?.load, dist_d: data?.dist_d }
+        ])
+      )
+    };
+    const link = document.createElement('a');
+    link.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    link.download = 'safety_studio_config.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
+  const handleImport = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      try {
+        const d = JSON.parse(ev.target.result);
+        if (d.geometry) setGeometry(d.geometry);
+        if (d.sensors) setSensors(d.sensors);
+        if (d.physics) setPhysics(d.physics);
+        if (d.evaluationCases) setEvaluationCases(d.evaluationCases);
+        if (d.fieldsets) setFieldsets(d.fieldsets);
+        if (d.results) setResults(d.results);
+        alert('Configuration imported successfully!');
+      } catch (err) {
+        alert('Failed to parse JSON: ' + err.message);
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
   };
 
   return (
@@ -55,6 +98,20 @@ const Home = ({ globals, setActiveTab }) => {
 
           <button className="primary-btn mt-4" onClick={handleStart}>
             <Play size={18} /> Start Configuration
+          </button>
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className="secondary-btn mt-4" style={{ flex: 1 }} onClick={handleDownload}>
+              <Download size={18} /> Export
+            </button>
+            <label className="secondary-btn mt-4" style={{ flex: 1, cursor: 'pointer' }}>
+               <Upload size={18} /> Import
+               <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
+            </label>
+          </div>
+
+          <button className="btn-danger mt-4" onClick={clearSession}>
+            <X size={18} /> Clear Session
           </button>
         </div>
       </div>

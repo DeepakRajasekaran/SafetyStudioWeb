@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layer, Line, Circle, Group } from 'react-konva';
-import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, PencilLine, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Anchor, Hammer } from 'lucide-react';
+import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, PencilLine, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Anchor, Hammer, Minus } from 'lucide-react';
 import axios from 'axios';
 import { parseWktToKonva } from '../utils/wktParser';
 import GridCanvas, { SCALE_M } from './GridCanvas';
@@ -13,14 +13,14 @@ const Editor = ({ globals, setActiveTab }) => {
   const { 
     geometry, setGeometry, 
     sensors, setSensors, 
-    cadData, setCadFieldSafe,
+    cadData, setCadFieldSafe, setCadBatchSafe,
     undo, pushToHistory,
     selectedSensorIndex, setSelectedSensorIndex,
     activeTool, setActiveTool
   } = globals;
   
   const [isConstructionMode, setIsConstructionMode] = useState(false);
-  const [toolbarPos, setToolbarPos] = useState({ x: 20, y: 150 });
+  const [isSubtractionMode, setIsSubtractionMode] = useState(false);
   const [showFootPrint, setShowFootPrint] = useState(true);
   const [showL1, setShowL1]   = useState(true);
   const [showL2, setShowL2]   = useState(true);
@@ -29,8 +29,6 @@ const Editor = ({ globals, setActiveTab }) => {
     name: 'New Sensor', x: 0, y: 0, mount: 0, fov: 270, r: 10, dia: 150, flipped: false
   });
   const [targetLayer, setTargetLayer] = useState('FootPrint');
-  const [isDragToolbar, setIsDragToolbar] = useState(false);
-  const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
   useEffect(() => {
     if (sensors && sensors.length > 0) {
@@ -66,29 +64,6 @@ const Editor = ({ globals, setActiveTab }) => {
     setSensors(sensors.filter((_, i) => i !== selectedSensorIndex));
     setSelectedSensorIndex(0);
   };
-  
-  // --- Draggable Toolbar Handlers ---
-  const handleDragStart = (e) => {
-    if (e.target.closest('button') || e.target.closest('input')) return;
-    setIsDragToolbar(true);
-    setDragOffset({ x: e.clientX - toolbarPos.x, y: e.clientY - toolbarPos.y });
-  };
-
-  useEffect(() => {
-    const handleMove = (e) => {
-      if (!isDragToolbar) return;
-      setToolbarPos({ x: e.clientX - dragOffset.x, y: e.clientY - dragOffset.y });
-    };
-    const handleUp = () => setIsDragToolbar(false);
-    if (isDragToolbar) {
-        window.addEventListener('mousemove', handleMove);
-        window.addEventListener('mouseup', handleUp);
-    }
-    return () => {
-        window.removeEventListener('mousemove', handleMove);
-        window.removeEventListener('mouseup', handleUp);
-    };
-  }, [isDragToolbar, dragOffset]);
 
   const parsedFP = showFootPrint && geometry.FootPrint ? parseWktToKonva(geometry.FootPrint) : [];
   const parsedL1 = showL1 && geometry.Load1 ? parseWktToKonva(geometry.Load1) : [];
@@ -138,125 +113,135 @@ const Editor = ({ globals, setActiveTab }) => {
       }
 
       if (e.key === 'Escape') {
-         if (isSketchingMode && targetSketches.length > 0) {
-            if (window.confirm("Save sketched shapes before exiting?")) {
-               const wkt = sketchesToWkt(targetSketches, SCALE_M);
-               if (wkt) setGeometry(prev => ({ ...prev, [targetLayer]: wkt }));
-            } else {
-               handleClearSketch();
+         if (isSketchingMode) {
+            if (activeTool !== 'select') {
+               setActiveTool('select');
+               return; // Only cancel tool, stay in sketching mode
             }
+            // If already in 'select' tool, exit sketching mode with prompt
+            if (targetSketches.length > 0) {
+               if (window.confirm("Save sketched shapes before exiting?")) {
+                  const { wkt, error } = sketchesToWkt(targetSketches, SCALE_M);
+                  if (error) {
+                    alert(`⚠️ Finalize Rejected:\n\n${error}`);
+                    return;
+                  }
+                  if (wkt) setGeometry(prev => ({ ...prev, [targetLayer]: wkt }));
+               } else {
+                  handleClearSketch();
+               }
+            }
+            setIsSketchingMode(false);
          }
-         setIsSketchingMode(false);
          setActiveTool('select');
          setSelectedSensorIndex(null);
       }
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [isSketchingMode, targetSketches, targetLayer, SCALE_M, setGeometry]);
+  }, [isSketchingMode, targetSketches, targetLayer, SCALE_M, setGeometry, activeTool, setActiveTool]);
 
   return (
-    <div className="editor-container">
+    <div className="editor-container" style={{ flexDirection: 'column' }}>
 
-      {/* ── Left: Canvas + Rulers ── */}
-      <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
-
-        {/* Floating Draggable Tool Bar */}
-        <div className="toolbar" 
-          onMouseDown={handleDragStart}
-          style={{ 
-            display: 'flex', justifyContent: 'space-between',
-            position: 'absolute', left: toolbarPos.x, top: toolbarPos.y,
-            cursor: isDragToolbar ? 'grabbing' : 'grab',
-            zIndex: 100 
-          }}>
-          <div style={{ display: 'flex', gap: 10, borderRight: '1px solid #444', paddingRight: 8, marginRight: 8, alignItems: 'center' }}>
-            <GripHorizontal size={14} color="#666" />
-            {[['FootPrint', showFootPrint, setShowFootPrint, '#999', !!geometry.FootPrint],
-              ['Load1',     showL1,        setShowL1,        '#2196F3', !!geometry.Load1],
-              ['Load2',     showL2,        setShowL2,        '#4CAF50', !!geometry.Load2]
-            ].map(([lbl, val, set, col, isEnabled]) => (
-              <label key={lbl} className="checkbox-group" style={{ color: col, opacity: isEnabled ? 1 : 0.4 }}>
-                <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} disabled={!isEnabled} />
-                {lbl}
-              </label>
-            ))}
-          </div>
-          
-          {isSketchingMode && (
-          <div style={{ display: 'flex', gap: 5, background: '#222', padding: '2px 8px', borderRadius: 6, alignItems: 'center' }}>
-            <button onClick={() => setActiveTool('select')} title="Select"
-              style={{ background: activeTool === 'select' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-              <MousePointer2 size={16} />
-            </button>
-            <button onClick={() => setActiveTool('anchor')} title="Anchor" style={{ background: activeTool === 'anchor' ? '#1a3a5c' : 'transparent', color: '#00e5ff', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-               <Anchor size={16} />
-            </button>
-
-            <div style={{ width: 1, height: 16, background: '#333', margin: '0 4px' }} />
-            
-            <button onClick={() => setIsConstructionMode(!isConstructionMode)} title="Toggle Construction Mode"
-              style={{ background: isConstructionMode ? '#5c4d1a' : 'transparent', color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-               <Hammer size={16} />
-            </button>
-            <button onClick={() => setActiveTool('circle')} title="Circle"
-              style={{ background: activeTool === 'circle' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-              <CircleIcon size={16} />
-            </button>
-            <button onClick={() => setActiveTool('line')} title="Line"
-              style={{ background: activeTool === 'line' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-              <PenLine size={16} />
-            </button>
-            <button onClick={() => setActiveTool('rect')} title="Rectangle"
-              style={{ background: activeTool === 'rect' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-              <Square size={16} />
-            </button>
-            <button onClick={() => setActiveTool('dimension')} title="Dimension"
-              style={{ background: activeTool === 'dimension' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-              <Ruler size={16} />
-            </button>
-            
-            <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
-
-            <button onClick={undo} title="Undo (Ctrl+Z)"
-              style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-              <Undo2 size={16} />
-            </button>
-            <button onClick={handleClearSketch} title="Clear All Sketch"
-              style={{ background: 'transparent', color: '#ff5252', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-              <Trash2 size={16} />
-            </button>
-            
-            <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
-
-            <div style={{ display: 'flex', gap: 2 }}>
-               {[
-                 ['coincide', Link2], ['equal', Equal], ['vertical', ArrowUp], 
-                 ['horizontal', ArrowRight], ['parallel', Rows], ['perpendicular', CornerDownLeft], ['anchor', Anchor]
-               ].map(([t, Icon]) => (
-                  <button key={t} onClick={() => setActiveTool(t)} title={t.charAt(0).toUpperCase() + t.slice(1)}
-                    style={{ background: activeTool === t ? '#1a3a5c' : 'transparent', color: '#00e5ff', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-                    <Icon size={16} />
-                  </button>
-               ))}
-            </div>
-
-            <div style={{ width: 1, height: 16, background: '#333', margin: '0 4px' }} />
-
-            <button onClick={() => {
-              const wkt = sketchesToWkt(targetSketches, SCALE_M);
-              if (wkt) {
-                setGeometry(prev => ({ ...prev, [targetLayer]: wkt }));
-                setIsSketchingMode(false);
-                setActiveTool('select');
-                alert(`Sketch applied to ${targetLayer}!`);
-              }
-            }} style={{ background: '#1a4a25', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
-              Finalize
-            </button>
-          </div>
-          )}
+      {/* ── Docked Sub-Toolbar ── */}
+      <div className="toolbar" style={{ justifyContent: 'flex-start', gap: 20 }}>
+        <div style={{ display: 'flex', gap: 15, borderRight: '1px solid #444', paddingRight: 12, marginRight: 12, alignItems: 'center' }}>
+          {[['FootPrint', showFootPrint, setShowFootPrint, '#999', !!geometry.FootPrint],
+            ['Load1',     showL1,        setShowL1,        '#2196F3', !!geometry.Load1],
+            ['Load2',     showL2,        setShowL2,        '#4CAF50', !!geometry.Load2]
+          ].map(([lbl, val, set, col, isEnabled]) => (
+            <label key={lbl} className="checkbox-group" style={{ color: col, opacity: isEnabled ? 1 : 0.4, cursor: 'pointer' }}>
+              <input type="checkbox" checked={val} onChange={e => set(e.target.checked)} disabled={!isEnabled} style={{ cursor: 'pointer' }} />
+              {lbl}
+            </label>
+          ))}
         </div>
+        
+        {isSketchingMode && (
+        <div style={{ display: 'flex', gap: 5, background: '#222', padding: '2px 8px', borderRadius: 6, alignItems: 'center' }}>
+          <button onClick={() => setActiveTool('select')} title="Select"
+            style={{ background: activeTool === 'select' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+            <MousePointer2 size={16} />
+          </button>
+
+          <div style={{ width: 1, height: 16, background: '#333', margin: '0 4px' }} />
+          
+          <button onClick={() => setIsConstructionMode(!isConstructionMode)} title="Toggle Construction Mode"
+            style={{ background: isConstructionMode ? '#5c4d1a' : 'transparent', color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+             <Hammer size={16} />
+          </button>
+          <button onClick={() => setIsSubtractionMode(!isSubtractionMode)} title="Toggle Subtraction Mode (Removal)"
+            style={{ background: isSubtractionMode ? '#5c1a1a' : 'transparent', color: isSubtractionMode ? '#ff5252' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+             <Minus size={16} />
+          </button>
+          <button onClick={() => setActiveTool('circle')} title="Circle"
+            style={{ background: activeTool === 'circle' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+            <CircleIcon size={16} />
+          </button>
+          <button onClick={() => setActiveTool('line')} title="Line"
+            style={{ background: activeTool === 'line' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+            <PenLine size={16} />
+          </button>
+          <button onClick={() => setActiveTool('rect')} title="Rectangle"
+            style={{ background: activeTool === 'rect' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+            <Square size={16} />
+          </button>
+          <button onClick={() => setActiveTool('dimension')} title="Dimension"
+            style={{ background: activeTool === 'dimension' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+            <Ruler size={16} />
+          </button>
+          
+          <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
+
+          <button onClick={undo} title="Undo (Ctrl+Z)"
+            style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+            <Undo2 size={16} />
+          </button>
+          <button onClick={handleClearSketch} title="Clear All Sketch"
+            style={{ background: 'transparent', color: '#ff5252', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+            <Trash2 size={16} />
+          </button>
+          
+          <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
+
+          <div style={{ display: 'flex', gap: 2 }}>
+             {[
+               ['coincide', Link2], ['equal', Equal], ['vertical', ArrowUp], 
+               ['horizontal', ArrowRight], ['parallel', Rows], ['perpendicular', CornerDownLeft], ['anchor', Anchor]
+             ].map(([t, Icon]) => (
+                <button key={t} onClick={() => setActiveTool(t)} title={t.charAt(0).toUpperCase() + t.slice(1)}
+                  style={{ background: activeTool === t ? '#1a3a5c' : 'transparent', color: '#00e5ff', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+                  <Icon size={16} />
+                </button>
+             ))}
+          </div>
+
+          <div style={{ width: 1, height: 16, background: '#333', margin: '0 4px' }} />
+
+          <button onClick={() => {
+            const { wkt, error } = sketchesToWkt(targetSketches, SCALE_M);
+            if (error) {
+              alert(`⚠️ Finalize Rejected:\n\n${error}`);
+              return;
+            }
+            if (wkt) {
+              setGeometry(prev => ({ ...prev, [targetLayer]: wkt }));
+              setIsSketchingMode(false);
+              setActiveTool('select');
+              alert(`✓ Sketch applied to ${targetLayer}!`);
+            }
+          }} style={{ background: '#1a4a25', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
+            Finalize
+          </button>
+        </div>
+        )}
+      </div>
+
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        {/* ── Left: Canvas + Rulers ── */}
+        <div style={{ flex: 1, position: 'relative', overflow: 'hidden' }}>
+
 
         <GridCanvas initialScale={1.0} draggable={activeTool === 'select'}>
           {({ scale: canvasScale, setOverlay }) => (
@@ -275,23 +260,25 @@ const Editor = ({ globals, setActiveTab }) => {
               ))}
               {/* CAD Sketches */}
               {isSketchingMode && (
-                <CADSketcher 
-                  sketches={targetSketches} 
-                  setSketches={(v) => setCadFieldSafe(targetLayer, null, 'sketches', v)} 
-                  dimensions={targetDimensions}
-                  setDimensions={(v) => setCadFieldSafe(targetLayer, null, 'dimensions', v)}
-                  fixedPoints={targetFixedPoints}
-                  setFixedPoints={(v) => setCadFieldSafe(targetLayer, null, 'fixedPoints', v)}
-                  constraints={targetConstraints}
-                  setConstraints={(v) => setCadFieldSafe(targetLayer, null, 'constraints', v)}
-                  referenceVertices={referenceVertices}
-                  pushToHistory={pushToHistory}
-                  scale={canvasScale} 
-                  SCALE_M={SCALE_M} 
-                  activeTool={activeTool} 
-                  setOverlay={setOverlay}
-                  isConstructionMode={isConstructionMode}
-                />
+                  <CADSketcher 
+                    sketches={targetSketches} 
+                    setSketches={(v) => setCadFieldSafe(targetLayer, null, 'sketches', v)} 
+                    dimensions={targetDimensions}
+                    setDimensions={(v) => setCadFieldSafe(targetLayer, null, 'dimensions', v)}
+                    fixedPoints={targetFixedPoints}
+                    setFixedPoints={(v) => setCadFieldSafe(targetLayer, null, 'fixedPoints', v)}
+                    constraints={targetConstraints}
+                    setConstraints={(v) => setCadFieldSafe(targetLayer, null, 'constraints', v)} 
+                    setCadBatchSafe={(updates) => setCadBatchSafe(targetLayer, null, updates)}
+                    referenceVertices={referenceVertices}
+                    pushToHistory={pushToHistory}
+                    scale={canvasScale} 
+                    SCALE_M={SCALE_M} 
+                    activeTool={activeTool} 
+                    setOverlay={setOverlay}
+                    isConstructionMode={isConstructionMode}
+                    isSubtractionMode={isSubtractionMode}
+                  />
               )}
 
               {/* Sensors */}
@@ -419,16 +406,14 @@ const Editor = ({ globals, setActiveTab }) => {
               </button>
               <button className="btn-red" title="Clear both DXF and Sketch" onClick={() => {
                  handleClear(key);
-                 setSketches([]);
+                 setCadFieldSafe(key, null, 'sketches', []);
               }} style={{ padding: '0 8px' }}>✕</button>
             </div>
           ))}
         </div>
 
-        <div style={{ flex: 1 }} />
-        <button className="btn-teal" onClick={() => setActiveTab('Generation')}>Next ›</button>
       </div>
-
+    </div> {/* End of main content flex container */}
       <style>{`.dark-input{background:#1e1e1e;border:1px solid #555;color:white;padding:5px 7px;border-radius:4px;width:100%;box-sizing:border-box;font-size:0.85rem}`}</style>
     </div>
   );

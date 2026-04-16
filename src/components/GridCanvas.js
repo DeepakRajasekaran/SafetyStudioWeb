@@ -157,10 +157,11 @@ const GridCanvas = ({ children, style = {}, initialScale = 1, draggable = true, 
   const xRulerRef    = useRef(null);
   const yRulerRef    = useRef(null);
 
-  const [size, setSize]       = useState({ w: 800, h: 600 });
+  const [size, setSize]       = useState({ w: 0, h: 0 }); // Start with 0 to detect first measurement
   const [scale, setScale]     = useState(initialScale);
-  const [internalStagePos, setInternalStagePos] = useState({ x: 400, y: 300 });
+  const [internalStagePos, setInternalStagePos] = useState({ x: 0, y: 0 });
   const [overlay, setOverlay] = useState(null); // { component, props }
+  const hasCentered = useRef(false);
 
   const stagePos = externalStagePos || internalStagePos;
   const setStagePos = (pos) => {
@@ -189,7 +190,24 @@ const GridCanvas = ({ children, style = {}, initialScale = 1, draggable = true, 
   useEffect(() => {
     drawRuler(xRulerRef.current, 'x', stagePos.x, stagePos.y, scale, size.w, size.h);
     drawRuler(yRulerRef.current, 'y', stagePos.x, stagePos.y, scale, size.w, size.h);
-  }, [stagePos, scale, size]);
+
+    // One-time centering upon initiation/refresh when size is first known
+    if (size.w > 0 && size.h > 0 && !hasCentered.current) {
+      const canvasW = size.w - RULER;
+      const canvasH = size.h - RULER;
+      const centeredPos = { x: canvasW / 2, y: canvasH / 2 };
+      
+      // If we are using internal state, set it directly
+      // If external, call the callback
+      if (onStagePosChange) {
+        onStagePosChange(centeredPos);
+      } else {
+        setInternalStagePos(centeredPos);
+      }
+      
+      hasCentered.current = true;
+    }
+  }, [stagePos, scale, size, onStagePosChange]);
 
   const handleWheel = useCallback((e) => {
     e.evt.preventDefault();
@@ -231,6 +249,7 @@ const GridCanvas = ({ children, style = {}, initialScale = 1, draggable = true, 
           draggable={draggable}
           onWheel={handleWheel}
           onDragEnd={handleDragEnd}
+          onContextMenu={(e) => e.evt.preventDefault()}
         >
           <GridLayer scale={scale} stagePos={stagePos} width={canvasW} height={canvasH} />
           <Layer listening={false}>

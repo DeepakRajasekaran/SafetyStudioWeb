@@ -3,9 +3,6 @@ FROM node:18-alpine AS build
 WORKDIR /app
 COPY package*.json ./
 RUN npm install
-# Patch PlaneGCS library for Webpack 5 compatibility
-RUN sed -i 's/new URL("\.\\\/",import\.meta\.url)/new URL("planegcs.js",import.meta.url)/g' node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.js
-RUN sed -i 's/if(fa){/if(false){/g' node_modules/@salusoft89/planegcs/dist/planegcs_dist/planegcs.js
 COPY . .
 RUN npm run build
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Layer, Line, Circle, Group } from 'react-konva';
-import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Settings, Info, List, Database, Hammer } from 'lucide-react';
+import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Settings, Info, List, Database, Hammer, Minus, X, Download } from 'lucide-react';
 import axios from 'axios';
+import Generation from './Generation';
 import { parseWktToKonva } from '../utils/wktParser';
 import GridCanvas, { SCALE_M } from './GridCanvas';
 import LidarMarker from './LidarMarker';
@@ -9,7 +10,6 @@ import CADSketcher from './CADSketcher';
 import ConstraintList from './ConstraintList';
 import { sketchesToWkt } from '../utils/cadToWkt';
 import { propagateConstraints } from '../utils/cadSolver';
-import GcsService from '../utils/GcsService';
 
 /** Helper to unwrap propagateConstraints result in Results.js */
 const runSolverResults = (sketches, constraints, dimensions, fixedPoints, SCALE_M, referenceVertices) => {
@@ -89,22 +89,42 @@ const Results = ({ globals }) => {
   const [viewMode, setViewMode] = useState('Composite'); 
   const [selectedLidar, setSelectedLidar] = useState(null);
   const [showArc, setShowArc] = useState(true);
+  const [showComposite, setShowComposite] = useState(false);
   const [retainOri, setRetainOri] = useState(true);
   const [wrtLidar, setWrtLidar] = useState(false);
   const [stagePos, setStagePos] = useState(null);
   const [inspectorText, setInspectorText] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
-  const [gcsStatus, setGcsStatus] = useState('loading'); // 'loading' | 'ready' | 'error'
   const [resultsMode, setResultsMode] = useState('polygon'); // 'polygon' | 'cad'
   const [isConstructionMode, setIsConstructionMode] = useState(false);
+  const [isSubtractionMode, setIsSubtractionMode] = useState(false);
   const [caseListOpen, setCaseListOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(true);
   const [draftCad, setDraftCad] = useState(null);
+  const [isGenOpen, setIsGenOpen] = useState(false);
 
   const targetSketches = cadData?.Overrides?.[selectedCaseId]?.sketches || [];
   const targetDimensions = cadData?.Overrides?.[selectedCaseId]?.dimensions || [];
   const targetFixedPoints = cadData?.Overrides?.[selectedCaseId]?.fixedPoints || [];
   const targetConstraints = cadData?.Overrides?.[selectedCaseId]?.constraints || [];
+
+
+  const handleExportJson = () => {
+    const exportData = {
+      geometry, sensors, physics, evaluationCases, fieldsets,
+      results: Object.fromEntries(
+        Object.entries(results).map(([id, data]) => [
+          id, { final_field_wkt: data?.final_field_wkt || data, load: data?.load, dist_d: data?.dist_d }
+        ])
+      )
+    };
+    const link = document.createElement('a');
+    link.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
+    link.download = 'safety_studio_config.json';
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
 
   const handleClearSketch = () => {
     pushToHistory();
@@ -114,23 +134,19 @@ const Results = ({ globals }) => {
     setCadFieldSafe('Overrides', selectedCaseId, 'constraints', []);
   };
 
-  // --- GCS Engine Lifecycle ---
+  // --- Draft State Lifecycle ---
   useEffect(() => {
-    GcsService.init().then(success => {
-      setGcsStatus(success ? 'ready' : 'error');
-      // Trigger a re-solve of draft state once initialized
-        if (success && draftCad) {
-          const res = runSolverResults(
-              draftCad.sketches, 
-              draftCad.constraints, 
-              draftCad.dimensions, 
-              draftCad.fixedPoints, 
-              SCALE_M
-          );
-          setDraftCad(prev => prev ? ({ ...prev, sketches: res.sketches }) : prev);
-        }
-    });
-  }, []);
+    if (draftCad && draftCad.sketches.length) {
+      const res = runSolverResults(
+          draftCad.sketches, 
+          draftCad.constraints, 
+          draftCad.dimensions, 
+          draftCad.fixedPoints, 
+          SCALE_M
+      );
+      setDraftCad(prev => prev ? ({ ...prev, sketches: res.sketches }) : prev);
+    }
+  }, [selectedCaseId]);
 
   // --- Draft State Lifecycle ---
   useEffect(() => {
@@ -256,9 +272,17 @@ const Results = ({ globals }) => {
       }
       if (e.key === 'Escape') {
          if (isEditMode && resultsMode === 'cad') {
+            if (activeTool !== 'select') {
+               setActiveTool('select');
+               return; // Only cancel tool
+            }
             if (targetSketches.length > 0) {
                if (window.confirm("Save sketched shapes before exiting?")) {
-                  const wkt = sketchesToWkt(targetSketches, SCALE_M);
+                  const { wkt, error } = sketchesToWkt(targetSketches, SCALE_M);
+                  if (error) {
+                    alert(`⚠️ Finalize Rejected:\n\n${error}`);
+                    return;
+                  }
                   if (wkt) setResults(prev => ({ ...prev, [selectedCaseId]: { ...prev[selectedCaseId], final_field_wkt: wkt }}));
                } else {
                   handleClearSketch();
@@ -271,7 +295,7 @@ const Results = ({ globals }) => {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [isEditMode, resultsMode, cadData, selectedCaseId, setResults, setCadFieldSafe, setActiveTool]);
+  }, [isEditMode, resultsMode, activeTool, targetSketches, selectedCaseId, setResults, setCadFieldSafe, setActiveTool]);
 
   const lidarList = currentResult?.lidars || [];
   const activeLidar = lidarList.find(l => l.name === selectedLidar) || lidarList[0] || null;
@@ -322,8 +346,8 @@ const Results = ({ globals }) => {
   const parsedSweeps = (viewMode === 'Sweep Steps' && currentResult?.sweeps) ? currentResult.sweeps.flatMap(s => parseWktToKonva(s)) : [];
 
   const worldToCanvas = (x, y) => [x * SCALE, -y * SCALE];
-  const trajCanvas = (showArc && viewMode === 'Composite' && currentResult?.traj) ? currentResult.traj.map(p => worldToCanvas(p[0], p[1])).flat() : null;
-  const frontTrajCanvas = (showArc && viewMode === 'Composite' && currentResult?.front_traj) ? currentResult.front_traj.map(p => worldToCanvas(p[0], p[1])).flat() : null;
+  const trajCanvas = (showArc && (viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && currentResult?.traj) ? currentResult.traj.map(p => worldToCanvas(p[0], p[1])).flat() : null;
+  const frontTrajCanvas = (showArc && (viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && currentResult?.front_traj) ? currentResult.front_traj.map(p => worldToCanvas(p[0], p[1])).flat() : null;
 
   const handlePointDrag = (polyIdx, pIdx, newX, newY) => {
     if (!currentResult?.final_field_wkt) return;
@@ -426,6 +450,9 @@ const Results = ({ globals }) => {
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#aaa', fontSize: '0.7rem', cursor: 'pointer', fontWeight: '500' }}>
                 <input type="checkbox" checked={retainOri} onChange={e => setRetainOri(e.target.checked)} style={{ accentColor: '#00e5ff', width: 14, height: 14 }} /> Original Orientation
               </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#aaa', fontSize: '0.7rem', cursor: 'pointer', fontWeight: '500' }}>
+                <input type="checkbox" checked={showComposite} onChange={e => setShowComposite(e.target.checked)} style={{ accentColor: '#00e5ff', width: 14, height: 14 }} /> Composite Field
+              </label>
             </div>
           </>
         )}
@@ -488,12 +515,20 @@ const Results = ({ globals }) => {
               style={{ background: isConstructionMode ? '#5c4d1a' : 'transparent', color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
                <Hammer size={16} />
             </button>
+            <button onClick={() => setIsSubtractionMode(!isSubtractionMode)} title="Toggle Subtraction Mode (Removal)"
+              style={{ background: isSubtractionMode ? '#5c1a1a' : 'transparent', color: isSubtractionMode ? '#ff5252' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+               <Minus size={16} />
+            </button>
             <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
             <button onClick={undo} style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Undo2 size={16} /></button>
             <button onClick={handleClearSketch} style={{ background: 'transparent', color: '#ff5252', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Trash2 size={16} /></button>
             <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
             <button onClick={() => {
-              const wkt = sketchesToWkt(targetSketches, SCALE_M);
+              const { wkt, error } = sketchesToWkt(targetSketches, SCALE_M);
+              if (error) {
+                alert(`⚠️ Finalize Rejected:\n\n${error}`);
+                return;
+              }
               if (wkt) {
                 const updatedCases = [...evaluationCases];
                 const k = updatedCases.find(c => c.id === selectedCaseId);
@@ -527,11 +562,16 @@ const Results = ({ globals }) => {
                 💾 SAVE SESSION
               </button>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginLeft: 10, fontSize: '0.6rem', color: gcsStatus === 'ready' ? '#4caf50' : (gcsStatus === 'loading' ? '#ff9800' : '#f44336') }}>
-               <Database size={12} /> {gcsStatus === 'ready' ? 'GCS READY' : (gcsStatus === 'loading' ? 'GCS LOADING...' : 'GCS ERROR')}
-            </div>
           </>
         )}
+        <button onClick={handleExportJson} style={{ background: '#222', color: '#888', border: '1px solid #333', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5, marginRight: 5 }}>
+          <Download size={14} /> EXPORT JSON
+        </button>
+
+        <button onClick={() => setIsGenOpen(true)} style={{ background: '#222', color: '#00e5ff', border: '1px solid #333', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5, marginRight: 5 }}>
+          <Settings size={14} /> EVALUATION
+        </button>
+
         <button onClick={handleCalculate} disabled={isCalculating} style={{ background: '#1e4a8a', color: 'white', border: 'none', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
           {isCalculating ? '...' : '▶ CALC'}
         </button>
@@ -541,6 +581,31 @@ const Results = ({ globals }) => {
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        
+        {/* ── Evaluation Modal ── */}
+        {isGenOpen && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <div className="modal-header">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <Settings size={20} color="#00e5ff" />
+                  <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>Evaluation Cases Configuration</h2>
+                </div>
+                <button onClick={() => setIsGenOpen(false)} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer' }}>
+                  <X size={24} />
+                </button>
+              </div>
+              <div className="modal-body">
+                <Generation globals={globals} />
+              </div>
+              <div style={{ padding: '15px 25px', background: '#222', borderTop: '1px solid #333', textAlign: 'right' }}>
+                 <button onClick={() => setIsGenOpen(false)} style={{ background: '#00e5ff', color: '#000', border: 'none', padding: '8px 25px', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>
+                   Close
+                 </button>
+              </div>
+            </div>
+          </div>
+        )}
         
         {/* Case List Sidebar */}
         {caseListOpen && (
@@ -574,12 +639,12 @@ const Results = ({ globals }) => {
                 ))}
 
                 {/* 2. Ghost Field (Reference) */}
-                {viewMode === 'Composite' && parsedIdeal.map((poly, i) => (
+                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedIdeal.map((poly, i) => (
                   <Line key={`ideal-${i}`} points={poly} stroke="#444" strokeWidth={1/scale} dash={[5/scale, 5/scale]} closed />
                 ))}
 
                 {/* 3. Safety Field (GOLD - Parity Color #FFD700) */}
-                {viewMode !== 'Sweep Steps' && parsedField.map((poly, i) => (
+                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedField.map((poly, i) => (
                   <Line 
                     key={`field-${i}`} 
                     points={poly} 
@@ -615,7 +680,7 @@ const Results = ({ globals }) => {
                 ))}
 
                 {/* 6. Ignored Area (Z 30 equivalent - Rendered Higher) */}
-                {viewMode === 'Composite' && parsedIgnored.map((poly, i) => (
+                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedIgnored.map((poly, i) => (
                   <Line key={`ig-${i}`} points={poly} fill={IGNORED_GRAY_FILL} strokeWidth={0} closed />
                 ))}
 
@@ -703,6 +768,7 @@ const Results = ({ globals }) => {
                       activeTool={activeTool}
                       setOverlay={setOverlay}
                       isConstructionMode={isConstructionMode}
+                      isSubtractionMode={isSubtractionMode}
                     />
                   );
                 })()}
