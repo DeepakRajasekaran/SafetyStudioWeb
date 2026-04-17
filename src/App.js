@@ -30,9 +30,9 @@ function App() {
     geometry: { FootPrint: null, Load1: null, Load2: null },
     sensors: [],
     physics: {
-      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: false },
-      Load1:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: false },
-      Load2:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: false }
+      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: false, field_method: 'union', hull_threshold: 0.5 },
+      Load1:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: false, field_method: 'union', hull_threshold: 0.5 },
+      Load2:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: false, field_method: 'union', hull_threshold: 0.5 }
     },
     evaluationCases: [
       { id: 1, load: 'NoLoad', v: 1.0, w: 0.0, type: 'std' },
@@ -43,9 +43,9 @@ function App() {
       { id: 6, load: 'NoLoad', v: 0.0, w: -1.0, type: 'std' }
     ],
     genConfig: {
-      NoLoad: { enabled: true, cnt: 6, v: 1.2, w: 0.6, minV: 0.1, revV: 0.3, fwd: true, turn: true, ip: true, rev: false },
-      Load1:  { enabled: false, cnt: 6, v: 1.0, w: 0.4, minV: 0.1, revV: 0.3, fwd: true, turn: true, ip: true, rev: false },
-      Load2:  { enabled: false, cnt: 6, v: 0.8, w: 0.3, minV: 0.1, revV: 0.3, fwd: true, turn: true, ip: true, rev: false },
+      NoLoad: { enabled: true, levels: 5, v: 1.2, w: 0.6, minV: 0.1, revV: 0.3, fwd: true, turn: true, ip: true, rev: false, idle: true },
+      Load1:  { enabled: false, levels: 5, v: 1.0, w: 0.4, minV: 0.1, revV: 0.3, fwd: true, turn: true, ip: true, rev: false, idle: true },
+      Load2:  { enabled: false, levels: 5, v: 0.8, w: 0.3, minV: 0.1, revV: 0.3, fwd: true, turn: true, ip: true, rev: false, idle: true },
     },
     results: {},
     fieldsets: [],
@@ -54,7 +54,8 @@ function App() {
       Load1:     { sketches: [], dimensions: [], fixedPoints: [], constraints: [] },
       Load2:     { sketches: [], dimensions: [], fixedPoints: [], constraints: [] },
       Overrides: {}
-    }
+    },
+    maxFields: 128
   };
 
   const [geometry, setGeometry] = useState(DEFAULTS.geometry);
@@ -65,6 +66,7 @@ function App() {
   const [genSync, setGenSync] = useState(true);
   const [results, setResults] = useState(DEFAULTS.results);
   const [fieldsets, setFieldsets] = useState(DEFAULTS.fieldsets);
+  const [maxFields, setMaxFields] = useState(DEFAULTS.maxFields);
   const [cadData, setCadData] = useState(DEFAULTS.cadData);
   const [history, setHistory] = useState([]);
 
@@ -153,6 +155,7 @@ function App() {
          if (data.genConfig) setGenConfig(data.genConfig);
          if (data.results) setResults(data.results);
          if (data.fieldsets) setFieldsets(data.fieldsets);
+         if (data.maxFields) setMaxFields(data.maxFields);
          if (data.cadData) setCadData(data.cadData);
        } catch (e) { console.error("Session Load failed", e); }
      }
@@ -161,10 +164,10 @@ function App() {
   useEffect(() => {
      const session = {
        geometry, sensors, physics, evaluationCases, 
-       genConfig, results, fieldsets, cadData
+       genConfig, results, fieldsets, maxFields, cadData
      };
      localStorage.setItem('safetystudio_session_v1', JSON.stringify(session));
-  }, [geometry, sensors, physics, evaluationCases, genConfig, results, fieldsets, cadData]);
+  }, [geometry, sensors, physics, evaluationCases, genConfig, results, fieldsets, maxFields, cadData]);
 
   const clearSession = () => {
     if (window.confirm("Are you sure you want to clear all session data? This cannot be undone.")) {
@@ -176,6 +179,7 @@ function App() {
       setGenConfig(DEFAULTS.genConfig);
       setResults(DEFAULTS.results);
       setFieldsets(DEFAULTS.fieldsets);
+      setMaxFields(DEFAULTS.maxFields);
       setCadData(DEFAULTS.cadData);
       setHistory([]);
       setActiveTab("Home");
@@ -190,6 +194,7 @@ function App() {
     evaluationCases, setEvaluationCases,
     results, setResults,
     fieldsets, setFieldsets,
+    maxFields, setMaxFields,
     genConfig, setGenConfig,
     genSync, setGenSync,
     cadData, setCadFieldSafe, setCadBatchSafe,

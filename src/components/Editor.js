@@ -16,7 +16,8 @@ const Editor = ({ globals, setActiveTab }) => {
     cadData, setCadFieldSafe, setCadBatchSafe,
     undo, pushToHistory,
     selectedSensorIndex, setSelectedSensorIndex,
-    activeTool, setActiveTool
+    activeTool, setActiveTool,
+    maxFields, setMaxFields
   } = globals;
   
   const [isConstructionMode, setIsConstructionMode] = useState(false);
@@ -334,7 +335,18 @@ const Editor = ({ globals, setActiveTab }) => {
 
         {/* Sensor Manager */}
         <div className="panel-section">
-          <div className="panel-title">LiDAR Manager</div>
+          <div className="panel-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            LiDAR Manager
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.8 }}>
+              <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#00e5ff' }}>CAPACITY:</span>
+              <input 
+                type="number" 
+                value={maxFields} 
+                onChange={(e) => setMaxFields(parseInt(e.target.value) || 0)}
+                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid #444', color: '#fff', width: 50, fontSize: '0.75rem', textAlign: 'center', borderRadius: 4, padding: '2px 0' }}
+              />
+            </div>
+          </div>
           <div className="sensor-list">
             {sensors.map((s, i) => (
               <div key={i} className={`sensor-item ${selectedSensorIndex === i ? 'selected' : ''}`}
@@ -368,11 +380,8 @@ const Editor = ({ globals, setActiveTab }) => {
                 <input type="text" className="dark-input" value={formData[key]}
                   onChange={e => setFormData({ ...formData, [key]: e.target.value })} 
                   onBlur={e => {
-                    if (e.target.value === '' || isNaN(parseFloat(e.target.value))) {
-                      setFormData(prev => ({ ...prev, [key]: 0 }));
-                    } else {
-                      setFormData(prev => ({ ...prev, [key]: parseFloat(e.target.value) }));
-                    }
+                    const parsed = parseFloat(e.target.value);
+                    setFormData(prev => ({ ...prev, [key]: isNaN(parsed) ? 0 : parsed }));
                   }}
                   onKeyDown={e => e.key === 'Enter' && handleSaveSensor()} />
               </React.Fragment>

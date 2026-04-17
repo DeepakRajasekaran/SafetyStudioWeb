@@ -10,16 +10,24 @@ import {
   ShieldCheck, 
   ArrowRight,
   ChevronRight,
-  Settings
+  Settings,
+  AlertTriangle
 } from 'lucide-react';
 
 const Hardware = ({ globals }) => {
-  const { evaluationCases, results, fieldsets, setFieldsets, sensors, geometry, physics } = globals;
+  const { evaluationCases, results, fieldsets, setFieldsets, sensors, geometry, physics, maxFields, setMaxFields } = globals;
   const [selectedFsIndex, setSelectedFsIndex] = useState(null);
   const [isExporting, setIsExporting] = useState(false);
 
+  const totalFields = fieldsets.reduce((sum, fs) => sum + (fs.fields?.length || 0), 0);
+  const isAtCapacity = totalFields >= maxFields;
+
   // --- Fieldset Actions ---
   const addFs = () => {
+    if (isAtCapacity) {
+      alert(`Hardware capacity reached (${maxFields} fields). Cannot add more fieldsets.`);
+      return;
+    }
     const newFs = { name: `Set ${fieldsets.length + 1}`, fields: [] };
     setFieldsets([...fieldsets, newFs]);
     setSelectedFsIndex(fieldsets.length);
@@ -40,6 +48,10 @@ const Hardware = ({ globals }) => {
 
   // --- Field Actions ---
   const addField = (fsIdx) => {
+    if (isAtCapacity) {
+      alert(`Hardware capacity reached (${maxFields} fields). Cannot add more fields.`);
+      return;
+    }
     const updated = [...fieldsets];
     const nextNum = updated[fsIdx].fields.length + 1;
     updated[fsIdx].fields.push({ name: `Field ${nextNum}`, caseId: evaluationCases[0]?.id || '' });
@@ -60,33 +72,21 @@ const Hardware = ({ globals }) => {
 
   // --- Auto-Gen Logic ---
   const autoGen = () => {
-    const groups = { NoLoad: [], Load1: [], Load2: [] };
-    evaluationCases.forEach(k => {
-      if (results[k.id]) {
-        groups[k.load].push(k);
-      }
-    });
-
-    const activeLoads = Object.keys(groups).filter(l => groups[l].length > 0);
-    if (activeLoads.length === 0) {
-      alert("No calculated results found. Please run simulations first.");
-      return;
-    }
-
-    const counts = activeLoads.map(l => groups[l].length);
-    const allSame = counts.every(c => c === counts[0]);
-    if (!allSame) {
-      alert("Mismatched case counts between loads. All active load types must have the same number of cases for auto-gen.");
-      return;
+    if (evaluationCases.length > maxFields) {
+      alert(`The number of evaluation cases (${evaluationCases.length}) exceeds the hardware field capacity (${maxFields}). Some cases will be skipped.`);
     }
 
     const newFieldsets = [];
-    for (let i = 0; i < counts[0]; i++) {
-        const fields = activeLoads.map(load => ({
-            name: `${load}_Case_${groups[load][i].id}`,
-            caseId: groups[load][i].id
-        }));
-        newFieldsets.push({ name: `Set ${i + 1}`, fields });
+    // Sequential logic: exactly 2 fields per set from the sorted evaluation cases
+    for (let i = 0; i < Math.min(evaluationCases.length, maxFields); i += 2) {
+      const pair = evaluationCases.slice(i, i + 2);
+      // Ensure we don't exceed maxFields even in a pair
+      const validPair = pair.filter((_, idx) => (i + idx) < maxFields);
+      const fields = validPair.map(c => ({
+        name: `${c.load}_${c.v},${c.w}`,
+        caseId: c.id
+      }));
+      newFieldsets.push({ name: `Set ${newFieldsets.length + 1}`, fields });
     }
     setFieldsets(newFieldsets);
   };
@@ -97,12 +97,22 @@ const Hardware = ({ globals }) => {
     setIsExporting(true);
     try {
       const sensor = sensors[sensorIndex];
-      const payload = { sensor, fieldsets, results, geometry, physics };
+      const strippedResults = {};
+      Object.keys(results).forEach(k => {
+        const r = results[k];
+        if (r) {
+          strippedResults[k] = {
+            ignored_wkt: r.ignored_wkt,
+            lidars: (r.lidars || []).map(l => ({ name: l.name, clip_wkt: l.clip_wkt }))
+          };
+        }
+      });
+      const payload = { sensor, fieldsets, results: strippedResults, geometry, physics, evaluationCases };
       const res = await axios.post('/api/export_sick', payload, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${sensor.name}.sdxml`);
+      link.setAttribute('download', `${sensor.name}.zip`);
       document.body.appendChild(link);
       link.click();
     } catch (err) {
@@ -134,7 +144,7 @@ const Hardware = ({ globals }) => {
       <div className="hardware-pane" style={{ flex: '0 0 280px' }}>
         <div className="hardware-header">
           <h3>Fieldsets</h3>
-          <button onClick={addFs} className="icon-btn" title="Add New Set">
+          <button onClick={addFs} className="icon-btn" title="Add New Set" disabled={isAtCapacity} style={{ opacity: isAtCapacity ? 0.3 : 1 }}>
             <Plus size={18} />
           </button>
         </div>
@@ -170,7 +180,7 @@ const Hardware = ({ globals }) => {
                 <span style={{ color: '#555', fontSize: '0.8rem' }}>FIELDSET /</span>
                 <span style={{ fontWeight: 'bold' }}>{fieldsets[selectedFsIndex].name}</span>
               </div>
-              <button onClick={() => addField(selectedFsIndex)} className="primary-btn" style={{ padding: '6px 12px', fontSize: '0.75rem' }}>
+              <button onClick={() => addField(selectedFsIndex)} className="primary-btn" disabled={isAtCapacity} style={{ padding: '6px 12px', fontSize: '0.75rem', opacity: isAtCapacity ? 0.5 : 1 }}>
                 <Plus size={14} /> Add Field
               </button>
             </div>
@@ -188,16 +198,24 @@ const Hardware = ({ globals }) => {
                   {fieldsets[selectedFsIndex].fields.map((f, i) => (
                     <tr key={i}>
                       <td>
-                        <input value={f.name} onChange={(e) => updateField(selectedFsIndex, i, 'name', e.target.value)}
+                        <input value={f.name} readOnly 
+                               style={{ opacity: 0.7, cursor: 'not-allowed' }}
                                className="hw-input" />
                       </td>
                       <td>
-                        <select value={f.caseId} onChange={(e) => updateField(selectedFsIndex, i, 'caseId', Number(e.target.value))}
-                                className="hw-input">
-                          {evaluationCases.map(k => (
-                            <option key={k.id} value={k.id}>Case {k.id}: v={k.v} w={k.w} ({k.load})</option>
-                          ))}
-                        </select>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <select value={f.caseId} onChange={(e) => updateField(selectedFsIndex, i, 'caseId', Number(e.target.value))}
+                                  className="hw-input" style={{ flex: 1 }}>
+                            {evaluationCases.map(k => (
+                              <option key={k.id} value={k.id}>Case {k.id}: v={k.v} w={k.w} ({k.load})</option>
+                            ))}
+                          </select>
+                          {!results[f.caseId] && (
+                            <div title="Missing calculated results" style={{ color: '#ff9800' }}>
+                              <AlertTriangle size={14} />
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td style={{ textAlign: 'right' }}>
                         <button onClick={() => delField(selectedFsIndex, i)} className="icon-btn red">
@@ -245,7 +263,7 @@ const Hardware = ({ globals }) => {
                   <button onClick={() => handleExportSick(i)} disabled={isExporting} className="primary-btn" style={{ justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                       <Download size={16} />
-                      <span>{s.model.includes('Sick') ? 'Export SDXML' : 'Export XML'}</span>
+                      <span>{s.model.includes('Sick') ? 'Export SICK Config' : 'Export XML'}</span>
                     </div>
                     <ChevronRight size={14} opacity={0.5} />
                   </button>

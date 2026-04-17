@@ -9,6 +9,7 @@ import math
 import xml.etree.ElementTree as ET
 from shapely import wkt
 from shapely.ops import unary_union
+from caseExport import generate_casesxml
 
 app = Flask(__name__)
 CORS(app)
@@ -69,6 +70,7 @@ def calculate_case():
         
         footprint = wkt.loads(footprint_wkt)
         
+        print(f"DEBUG: Processing {load_key} case with P: {P}")
         final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union = SafetyMath.calc_case(
             footprint, load_poly, sensors, v, w_input, P
         )
@@ -116,6 +118,10 @@ def export_sick():
     try:
         if not os.path.exists(XML_TEMPLATE_PATH):
             return jsonify({"error": "Template XML not found inside container."}), 500
+            
+        XML_CASES_TEMPLATE_PATH = "exampleCases.casesxml"
+        if not os.path.exists(XML_CASES_TEMPLATE_PATH):
+            return jsonify({"error": "Cases Template XML not found."}), 500
         
         tree = ET.parse(XML_TEMPLATE_PATH)
         root = tree.getroot()
@@ -123,6 +129,8 @@ def export_sick():
         s = data['sensor']
         fieldsets = data['fieldsets']
         results = data['results']
+        evaluationCases = data.get('evaluationCases', [])
+        case_dict = {str(c['id']): c for c in evaluationCases}
         
         # 1. Update Device
         devs = root.find('Devices')
@@ -162,21 +170,42 @@ def export_sick():
                         for pt in pts:
                             ET.SubElement(x_p, 'Point', {'X':str(int(pt[0]*1000)), 'Y':str(int(pt[1]*1000))})
 
-        # 3. Fieldsets
+        # 3. Fieldsets and Case generation
+        sdxml_fields = []
+        
         fs_node = root.find('Fieldsets')
         if fs_node is None: fs_node = ET.SubElement(root, 'Fieldsets')
         for c in list(fs_node): fs_node.remove(c)
         
-        for fs_item in fieldsets:
+        for fs_idx, fs_item in enumerate(fieldsets):
             x_fs = ET.SubElement(fs_node, 'Fieldset'); x_fs.set('Name', fs_item['name'])
-            for fld_item in fs_item['fields']:
+            for f_idx, fld_item in enumerate(fs_item['fields']):
+                caseId_str = str(fld_item['caseId'])
+                if caseId_str in case_dict:
+                    c = case_dict[caseId_str]
+                    field_name = f"{c['load']}_{c['v']},{c['w']}"
+                else:
+                    field_name = fld_item['name']
+                    
+                sdxml_fields.append({
+                    "fieldset_name": fs_item['name'],
+                    "fieldset_index": fs_idx,
+                    "field_index_in_set": f_idx,
+                    "field_name": field_name,
+                    "fieldtype": 'ProtectiveSafeBlanking',
+                    "multiple_sampling": 2,
+                    "resolution": 70,
+                    "tolerance_positive": 0,
+                    "tolerance_negative": 0
+                })
+                
                 x_f = ET.SubElement(x_fs, 'Field')
-                x_f.set('Name', fld_item['name'])
+                x_f.set('Name', field_name)
                 # Default SICK attrs
                 for k,v in {'Fieldtype':'ProtectiveSafeBlanking', 'MultipleSampling':'2', 'Resolution':'70', 'TolerancePositive':'0', 'ToleranceNegative':'0'}.items():
                     x_f.set(k,v)
                 
-                res = results.get(str(fld_item['caseId']))
+                res = results.get(caseId_str)
                 if res:
                     lid_data = next((l for l in res['lidars'] if l['name'] == s['name']), None)
                     if lid_data and lid_data.get('clip_wkt'):
@@ -190,10 +219,21 @@ def export_sick():
                                 for pt in pts:
                                     ET.SubElement(x_p, 'Point', {'X':str(int(pt[0]*1000)), 'Y':str(int(pt[1]*1000))})
             
-        out = io.BytesIO()
-        tree.write(out, encoding='utf-8', xml_declaration=True)
-        out.seek(0)
-        return send_file(out, mimetype="application/xml", as_attachment=True, download_name=f"{s['name']}.sdxml")
+        sdxml_out = io.BytesIO()
+        tree.write(sdxml_out, encoding='utf-8', xml_declaration=True)
+        sdxml_str = sdxml_out.getvalue().decode('utf-8')
+        
+        # 4. Generate Cases XML string
+        casesxml_str = generate_casesxml(sdxml_fields, XML_CASES_TEMPLATE_PATH, None)
+        
+        # 5. Pack into ZIP
+        out_zip = io.BytesIO()
+        with zipfile.ZipFile(out_zip, 'w') as z:
+            z.writestr(f"{s['name']}.sdxml", sdxml_str)
+            z.writestr(f"{s['name']}.casesxml", casesxml_str)
+            
+        out_zip.seek(0)
+        return send_file(out_zip, mimetype="application/zip", as_attachment=True, download_name=f"{s['name']}.zip")
         
     except Exception as e:
         import traceback

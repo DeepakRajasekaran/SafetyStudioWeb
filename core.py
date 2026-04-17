@@ -84,8 +84,7 @@ class SafetyMath:
         if not load_poly or load_poly.is_empty: return None
         try:
             sensor = Point(og)
-            if load_poly.distance(sensor) < 1e-3:
-                return sensor.buffer(r)
+            if load_poly.distance(sensor) < 1e-3: return None
 
             shadows = []
             def process_geom(geom):
@@ -93,26 +92,41 @@ class SafetyMath:
                     if not geom.exterior.is_ccw:
                         geom = Polygon(list(geom.exterior.coords)[::-1])
                     pts = list(geom.exterior.coords)
-                    if len(pts) < 2: return
+                    
+                    chains = []
+                    current_chain = []
                     for i in range(len(pts) - 1):
                         p1 = pts[i]; p2 = pts[i+1]
                         cp = (p2[0]-p1[0])*(og[1]-p1[1]) - (p2[1]-p1[1])*(og[0]-p1[0])
                         if cp < -1e-6:
-                            v1 = (p1[0]-og[0], p1[1]-og[1])
-                            v2 = (p2[0]-og[0], p2[1]-og[1])
-                            d1 = math.hypot(v1[0], v1[1])
-                            d2 = math.hypot(v2[0], v2[1])
-                            if d1 < 1e-4 or d2 < 1e-4: continue
-                            s1 = r / d1; s2 = r / d2
-                            p1_ext = (og[0] + v1[0]*s1, og[1] + v1[1]*s1)
-                            p2_ext = (og[0] + v2[0]*s2, og[1] + v2[1]*s2)
-                            shadows.append(Polygon([p1, p2, p2_ext, p1_ext]))
+                            if not current_chain: current_chain.append(p1)
+                            current_chain.append(p2)
+                        else:
+                            if current_chain:
+                                chains.append(current_chain)
+                                current_chain = []
+                    if current_chain:
+                        if chains and current_chain[-1] == chains[0][0]:
+                            chains[0] = current_chain[:-1] + chains[0]
+                        else:
+                            chains.append(current_chain)
+                    
+                    for chain in chains:
+                        if len(chain) < 2: continue
+                        poly_pts = list(chain)
+                        for p in reversed(chain):
+                            dx = p[0] - og[0]; dy = p[1] - og[1]
+                            d = math.hypot(dx, dy)
+                            if d < 1e-4: continue
+                            poly_pts.append((og[0] + dx/d * r, og[1] + dy/d * r))
+                        if len(poly_pts) >= 3:
+                            shadows.append(Polygon(poly_pts).buffer(0.001))
                 elif geom.geom_type in ['MultiPolygon', 'GeometryCollection']:
                     for g in geom.geoms: process_geom(g)
             
             process_geom(load_poly)
             if not shadows: return None
-            return unary_union(shadows).buffer(0)
+            return unary_union(shadows)
         except Exception as e:
             return None
 
@@ -252,6 +266,13 @@ class SafetyMath:
                 sw_union = unary_union(sweeps)
                 if abs(v) < 1e-3 and abs(ang_vel) > 1e-3 and P.get('patch_notch', False):
                     sw_union = SafetyMath.patch_notch(sw_union)
+                field_method = P.get('field_method', 'union')
+                if field_method == 'hull':
+                    sw_union = sw_union.convex_hull
+                elif field_method == 'hybrid':
+                    threshold = float(P.get('hull_threshold', 0.5))
+                    if D < threshold:
+                        sw_union = sw_union.convex_hull
                 final = sw_union.buffer(P.get('smooth',0.05), join_style=1).simplify(0.01)
             
             lid_out = []; all_fovs = []; composite_clips = []
@@ -274,7 +295,7 @@ class SafetyMath:
                         if sh: lidar_shadows.append(sh)
                 
                 if lidar_shadows: clip = clip.difference(unary_union(lidar_shadows))
-                if load_poly: clip = clip.difference(load_poly)
+                if load_poly and P.get('shadow', True): clip = clip.difference(load_poly)
                 
                 composite_clips.append(clip)
                 
@@ -284,12 +305,17 @@ class SafetyMath:
                     shadow = SafetyMath.get_shadow_wedge(og, load_poly, max_r*1.1)
                     if shadow: clip_indiv = clip.difference(shadow)
 
+                if clip_indiv.geom_type in ('MultiPolygon', 'GeometryCollection'):
+                    polys = [g for g in getattr(clip_indiv, 'geoms', []) if g.geom_type == 'Polygon']
+                    if polys: clip_indiv = max(polys, key=lambda p: p.area)
+                if getattr(clip_indiv, 'geom_type', None) == 'Polygon':
+                    clip_indiv = Polygon(clip_indiv.exterior.coords)
+
                 # To Local
                 s_rot=np.radians(90+s['mount']); loc=[]
-                if not clip_indiv.is_empty:
+                if not clip_indiv.is_empty and clip_indiv.geom_type == 'Polygon':
                     c,si=np.cos(-s_rot),np.sin(-s_rot); R=np.array([[c,-si],[si,c]])
-                    gs=clip_indiv.geoms if clip_indiv.geom_type=='MultiPolygon' else [clip_indiv]
-                    for g in gs: loc.append( (np.array(g.exterior.coords)-np.array(og)) @ R.T )
+                    loc.append( (np.array(clip_indiv.exterior.coords)-np.array(og)) @ R.T )
                 
                 lid_out.append({
                     'name':s['name'], 
@@ -307,12 +333,17 @@ class SafetyMath:
             ignored_poly = None
             if all_fovs:
                 ignored_poly = final.difference(unary_union(all_fovs))
-                if load_poly: ignored_poly = ignored_poly.difference(load_poly)
             
             if composite_clips:
                 final = unary_union(composite_clips)
             elif load_poly:
                 final = final.difference(load_poly)
+                
+            if final.geom_type in ('MultiPolygon', 'GeometryCollection'):
+                polys = [g for g in getattr(final, 'geoms', []) if g.geom_type == 'Polygon']
+                if polys: final = max(polys, key=lambda p: p.area)
+            if getattr(final, 'geom_type', None) == 'Polygon':
+                final = Polygon(final.exterior.coords)
             
             front_traj = []
             for i in range(len(traj)):
