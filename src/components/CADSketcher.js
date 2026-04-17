@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Group, Line, Circle, Text } from 'react-konva';
+import { Group, Line, Circle, Text, Rect } from 'react-konva';
 import { applyDimensionUpdate } from '../utils/cadConstraints';
 import { applyConstraint, validateConstraints, isFullyConstrained, propagateConstraints } from '../utils/cadSolver';
 import { vec, isPointSafe } from '../utils/cadMath';
@@ -150,12 +150,14 @@ function DimOverlay({ x, y, value, tolerance, onCommit, onCancel }) {
   );
 }
 
-function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPoints, setFixedPoints, constraints = [], setConstraints, setCadBatchSafe, referenceVertices = [], pushToHistory, scale, SCALE_M, activeTool, setOverlay, isConstructionMode, isSubtractionMode }) {
+const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDimensions, fixedPoints, setFixedPoints, constraints = [], setConstraints, setCadBatchSafe, referenceVertices = [], pushToHistory, scale, SCALE_M, activeTool, setOverlay, isConstructionMode, isSubtractionMode }, ref) => {
   // 1. Foundation State & Refs (Must be first to avoid TDZ ReferenceErrors in dependency arrays)
   const [newShape, setNewShape] = useState(null);
   const [dimSelection, setDimSelection] = useState([]);
   const [constraintSelection, setConstraintSelection] = useState([]);
-  const drawingState = useRef({ step: 0, isDragging: false, startPos: null, startSnap: null });
+  const [selectedSketchIds, setSelectedSketchIds] = useState([]);
+  const [selectionBox, setSelectionBox] = useState(null);
+  const drawingState = useRef({ step: 0, isDragging: false, startPos: null, startSnap: null, lastClickTime: 0 });
 
   const sketchesRef      = useRef(sketches);
   const constraintsRef   = useRef(constraints);
@@ -166,6 +168,65 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
   useEffect(() => { constraintsRef.current = constraints; }, [constraints]);
   useEffect(() => { dimensionsRef.current  = dimensions;  }, [dimensions]);
   useEffect(() => { fixedPointsRef.current = fixedPoints; }, [fixedPoints]);
+
+  const deleteSelected = useCallback(() => {
+    if (!selectedSketchIds.length) return;
+    
+    // Filter out shapes
+    const updatedSketches = sketchesRef.current.filter(s => !selectedSketchIds.includes(s.id));
+    
+    // Filter out tied constraints
+    const updatedConstraints = constraintsRef.current.filter(c => {
+      const involvesSelected = (c.v1 && selectedSketchIds.includes(c.v1.sketchId)) || 
+                               (c.v2 && selectedSketchIds.includes(c.v2.sketchId));
+      return !involvesSelected;
+    });
+
+    // Filter out tied dims
+    const updatedDimensions = dimensionsRef.current.filter(d => {
+      const involvesSelected = (d.v1 && selectedSketchIds.includes(d.v1.sketchId)) || 
+                               (d.v2 && selectedSketchIds.includes(d.v2.sketchId));
+      return !involvesSelected;
+    });
+
+    // Filter out fixed points
+    const updatedFixed = fixedPointsRef.current.filter(f => !selectedSketchIds.includes(f.sketchId));
+
+    pushToHistory();
+    const solveResult = runSolver(updatedSketches, updatedConstraints, updatedDimensions, updatedFixed, SCALE_M, referenceVertices);
+    
+    if (setCadBatchSafe) {
+      setCadBatchSafe({
+        sketches: solveResult.error ? updatedSketches : solveResult.sketches,
+        constraints: updatedConstraints,
+        dimensions: updatedDimensions,
+        fixedPoints: updatedFixed
+      });
+    } else {
+      setSketches(solveResult.error ? updatedSketches : solveResult.sketches);
+      if (setConstraints) setConstraints(updatedConstraints);
+      if (setDimensions) setDimensions(updatedDimensions);
+      if (setFixedPoints) setFixedPoints(updatedFixed);
+    }
+    setSelectedSketchIds([]);
+  }, [selectedSketchIds, pushToHistory, SCALE_M, referenceVertices, setCadBatchSafe, setSketches, setConstraints, setDimensions, setFixedPoints]);
+
+  React.useImperativeHandle(ref, () => ({
+    deleteSelection: deleteSelected,
+    hasSelection: selectedSketchIds.length > 0
+  }));
+
+  // Keyboard delete listener
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') return;
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        deleteSelected();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [deleteSelected]);
 
   // 1. Internal Helpers (Moved to top of component body to prevent ReferenceErrors)
   const getVertices = useCallback(() => {
@@ -293,7 +354,7 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
 
     const solveResult = runSolver([...sketchesRef.current, { ...finalized, id: humanId, name: humanId }], newConstraints, dimensionsRef.current, fixedPointsRef.current, SCALE_M, referenceVertices);
 
-    drawingState.current = { step: 0, isDragging: false, startPos: null, startSnap: null };
+    drawingState.current = { step: 0, isDragging: false, startPos: null, startSnap: null, lastClickTime: drawingState.current.lastClickTime };
 
     if (setCadBatchSafe) {
       setCadBatchSafe({
@@ -310,12 +371,14 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
 
   // 2. Lifecycle & Interaction Hooks
   useEffect(() => {
-    if (drawingState.current.step !== 0) {
-      drawingState.current = { step: 0, isDragging: false, startPos: null };
+    if (drawingState.current.step !== 0 || selectionBox) {
+      drawingState.current = { step: 0, isDragging: false, startPos: null, lastClickTime: 0 };
       setNewShape(null);
+      setSelectionBox(null);
     }
     setDimSelection([]);
     setConstraintSelection([]);
+    if (activeTool !== 'select') setSelectedSketchIds([]);
   }, [activeTool]);
 
   useEffect(() => {
@@ -385,12 +448,32 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
   }, [activeTool, constraintSelection]);
 
   const handleMouseDown = useCallback((e) => {
-    if (!activeTool || activeTool === 'select') return;
+    if (!activeTool) return;
+    const now = Date.now();
+    const isDoubleClick = (now - drawingState.current.lastClickTime < 350);
+    drawingState.current.lastClickTime = now;
+    
     const stage = e.target.getStage();
     if (!stage) return;
     const pos = stage.getRelativePointerPosition();
     const snapped = snapPos(pos.x, pos.y);
     const snapMeta = snapped.snapped && snapped.sketchId ? { sketchId: snapped.sketchId, part: snapped.part } : null;
+
+    if (activeTool === 'select') {
+      if (snapped.snapped && snapped.sketchId && !snapped.sketchId.startsWith('ref-') && snapped.sketchId !== 'origin') {
+        setSelectedSketchIds(prev => {
+          if (e.evt.shiftKey) {
+            return prev.includes(snapped.sketchId) ? prev.filter(id => id !== snapped.sketchId) : [...prev, snapped.sketchId];
+          }
+          return [snapped.sketchId];
+        });
+      } else if (isDoubleClick) {
+        setSelectedSketchIds(e.evt.shiftKey ? selectedSketchIds : []);
+        setSelectionBox({ startX: pos.x, startY: pos.y, endX: pos.x, endY: pos.y });
+        e.cancelBubble = true;
+      }
+      return;
+    }
 
     if (activeTool === 'dimension') {
       if (dimSelection.length === 0) {
@@ -484,7 +567,7 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
       const shapeProps = { construction: isConstructionMode, op: isSubtractionMode ? 'subtract' : 'union' };
       
       if (drawingState.current.step === 0) {
-        drawingState.current = { step: 1, isDragging: false, startPos: { x: pos.x, y: pos.y }, startSnap: snapMeta };
+        drawingState.current = { step: 1, isDragging: false, startPos: { x: pos.x, y: pos.y }, startSnap: snapMeta, lastClickTime: drawingState.current.lastClickTime };
         if (activeTool === 'line') setNewShape({ type: 'line', points: [snapped.x, snapped.y, snapped.x, snapped.y], ...shapeProps });
         else if (activeTool === 'circle') setNewShape({ type: 'circle', center: [snapped.x, snapped.y], radius: 0, ...shapeProps });
         else if (activeTool === 'rect') setNewShape({ type: 'rect', start: [snapped.x, snapped.y], end: [snapped.x, snapped.y], ...shapeProps });
@@ -526,6 +609,14 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
   }, [activeTool, snapPos, sketches, dimSelection, constraintSelection, SCALE_M, setOverlay, fixedPoints, dimensions, setSketches, pushToHistory, isConstructionMode, isSubtractionMode, newShape, finalizeShape]);
 
   const handleMouseMove = useCallback((e) => {
+    if (activeTool === 'select' && selectionBox) {
+      const stage = e.target.getStage();
+      if (!stage) return;
+      const pos = stage.getRelativePointerPosition();
+      setSelectionBox(prev => ({ ...prev, endX: pos.x, endY: pos.y }));
+      return;
+    }
+
     if (drawingState.current.step === 0 || !newShape) return;
     const stage = e.target.getStage();
     if (!stage) return;
@@ -545,13 +636,43 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
     else if (newShape.type === 'rect') setNewShape({ ...newShape, end: [snapped.x, snapped.y] });
   }, [newShape, snapPos]);
 
-  const handleMouseUp = useCallback(() => {
+  const handleMouseUp = useCallback((e) => {
+    // Finish select drag
+    if (activeTool === 'select' && selectionBox) {
+      const { startX, startY, endX, endY } = selectionBox;
+      if (Math.abs(startX - endX) > 2 && Math.abs(startY - endY) > 2) {
+        const minX = Math.min(startX, endX);
+        const maxX = Math.max(startX, endX);
+        const minY = Math.min(startY, endY);
+        const maxY = Math.max(startY, endY);
+        
+        const inBox = (px, py) => px >= minX && px <= maxX && py >= minY && py <= maxY;
+        
+        const newlySelected = sketchesRef.current.filter(s => {
+          if (s.type === 'line') {
+            return inBox(s.points[0], s.points[1]) || inBox(s.points[2], s.points[3]);
+          } else if (s.type === 'circle') {
+            return inBox(s.center[0], s.center[1]);
+          } else if (s.type === 'rect') {
+            return inBox(s.start[0], s.start[1]) || inBox(s.end[0], s.end[1]);
+          }
+          return false;
+        }).map(s => s.id);
+
+        if (newlySelected.length) {
+          setSelectedSketchIds(prev => Array.from(new Set([...prev, ...newlySelected])));
+        }
+      }
+      setSelectionBox(null);
+      return;
+    }
+
     // Only auto-finalize for Circle/Rect via drag. 
     // Line (Polyline) requires explicit clicks or dblclick to finalize.
     if (drawingState.current.step === 1 && drawingState.current.isDragging && newShape && activeTool !== 'line') {
       finalizeShape();
     }
-  }, [newShape, finalizeShape, activeTool]);
+  }, [selectionBox, newShape, finalizeShape, activeTool]);
 
   const handleDblClick = useCallback((e) => {
      if (drawingState.current.step === 1 && activeTool === 'line') {
@@ -563,15 +684,17 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
     <Group onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onDblClick={handleDblClick}>
       <Circle radius={10000} fill="rgba(0,0,0,0)" />
       {sketches.map(s => {
+        const isSelected = selectedSketchIds.includes(s.id);
         const baseColor = isFullyConstrained(s, dimensions, fixedPoints) ? '#aaaaaa' : 'white';
         const opColor = s.op === 'subtract' ? '#FF5252' : baseColor;
-        const color = s.construction ? '#666' : opColor;
+        const color = isSelected ? '#00e5ff' : (s.construction ? '#666' : opColor);
+        const strokeWidth = (isSelected ? 3 : 2) / scale;
         const dash = s.construction ? [5/scale, 5/scale] : null;
         return (
         <Group key={s.id}>
-          {s.type === 'line' && <Line points={s.points} stroke={color} strokeWidth={2 / scale} dash={dash} />}
-          {s.type === 'circle' && <Circle x={s.center[0]} y={s.center[1]} radius={s.radius} stroke={color} strokeWidth={2 / scale} dash={dash} />}
-          {s.type === 'rect' && <Line points={[s.start[0], s.start[1], s.end[0], s.start[1], s.end[0], s.end[1], s.start[0], s.end[1], s.start[0], s.start[1]]} stroke={color} strokeWidth={2 / scale} closed dash={dash} />}
+          {s.type === 'line' && <Line points={s.points} stroke={color} strokeWidth={strokeWidth} dash={dash} shadowBlur={isSelected ? 5 : 0} shadowColor="#00e5ff" />}
+          {s.type === 'circle' && <Circle x={s.center[0]} y={s.center[1]} radius={s.radius} stroke={color} strokeWidth={strokeWidth} dash={dash} shadowBlur={isSelected ? 5 : 0} shadowColor="#00e5ff" />}
+          {s.type === 'rect' && <Line points={[s.start[0], s.start[1], s.end[0], s.start[1], s.end[0], s.end[1], s.start[0], s.end[1], s.start[0], s.start[1]]} stroke={color} strokeWidth={strokeWidth} closed dash={dash} shadowBlur={isSelected ? 5 : 0} shadowColor="#00e5ff" />}
         </Group>
       )})}
       {newShape && (
@@ -616,6 +739,20 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
         <Circle key={`sel-${i}`} x={v.x} y={v.y} radius={8 / scale} fill="rgba(255,165,0,0.8)" listening={false} stroke="white" strokeWidth={1.5/scale} />
       ))}
 
+      {/* Marquee Selection Box */}
+      {selectionBox && (
+        <Rect
+          x={Math.min(selectionBox.startX, selectionBox.endX)}
+          y={Math.min(selectionBox.startY, selectionBox.endY)}
+          width={Math.abs(selectionBox.startX - selectionBox.endX)}
+          height={Math.abs(selectionBox.startY - selectionBox.endY)}
+          fill="rgba(0, 229, 255, 0.2)"
+          stroke="#00e5ff"
+          strokeWidth={1 / scale}
+          listening={false}
+        />
+      )}
+
       {getVertices().map((v, i) => {
         const isFixed = (fixedPoints || []).some(f => f.sketchId === v.sketchId && f.part === v.part);
         if (v.type === 'origin') {
@@ -639,6 +776,6 @@ function CADSketcher({ sketches, setSketches, dimensions, setDimensions, fixedPo
       })}
     </Group>
   );
-};
+});
 
 export default CADSketcher;

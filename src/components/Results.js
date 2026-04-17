@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Layer, Line, Circle, Group } from 'react-konva';
 import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Settings, Info, List, Database, Hammer, Minus, X, Download } from 'lucide-react';
 import axios from 'axios';
@@ -92,14 +92,20 @@ const Results = ({ globals }) => {
   const [showComposite, setShowComposite] = useState(false);
   const [retainOri, setRetainOri] = useState(true);
   const [wrtLidar, setWrtLidar] = useState(false);
+  const [showFootprint, setShowFootprint] = useState(true);
+  const [showLoad1, setShowLoad1] = useState(true);
+  const [showLoad2, setShowLoad2] = useState(true);
+  const [fillSweeps, setFillSweeps] = useState(false);
   const [stagePos, setStagePos] = useState(null);
   const [inspectorText, setInspectorText] = useState('');
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isEditingMask, setIsEditingMask] = useState(false);
+  const originalMaskWkt = useRef(null);
   const [resultsMode, setResultsMode] = useState('polygon'); // 'polygon' | 'cad'
   const [isConstructionMode, setIsConstructionMode] = useState(false);
   const [isSubtractionMode, setIsSubtractionMode] = useState(false);
   const [caseListOpen, setCaseListOpen] = useState(true);
-  const [inspectorOpen, setInspectorOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(false);
   const [draftCad, setDraftCad] = useState(null);
   const [isGenOpen, setIsGenOpen] = useState(false);
 
@@ -107,6 +113,8 @@ const Results = ({ globals }) => {
   const targetDimensions = cadData?.Overrides?.[selectedCaseId]?.dimensions || [];
   const targetFixedPoints = cadData?.Overrides?.[selectedCaseId]?.fixedPoints || [];
   const targetConstraints = cadData?.Overrides?.[selectedCaseId]?.constraints || [];
+
+  const cadRef = useRef(null);
 
 
   const handleExportJson = () => {
@@ -127,11 +135,17 @@ const Results = ({ globals }) => {
   };
 
   const handleClearSketch = () => {
-    pushToHistory();
-    setCadFieldSafe('Overrides', selectedCaseId, 'sketches', []);
-    setCadFieldSafe('Overrides', selectedCaseId, 'dimensions', []);
-    setCadFieldSafe('Overrides', selectedCaseId, 'fixedPoints', []);
-    setCadFieldSafe('Overrides', selectedCaseId, 'constraints', []);
+    if (cadRef.current && cadRef.current.hasSelection) {
+      cadRef.current.deleteSelection();
+      return;
+    }
+    if (window.confirm("Are you sure you want to delete ALL sketches?")) {
+      pushToHistory();
+      setCadFieldSafe('Overrides', selectedCaseId, 'sketches', []);
+      setCadFieldSafe('Overrides', selectedCaseId, 'dimensions', []);
+      setCadFieldSafe('Overrides', selectedCaseId, 'fixedPoints', []);
+      setCadFieldSafe('Overrides', selectedCaseId, 'constraints', []);
+    }
   };
 
   // --- Draft State Lifecycle ---
@@ -218,8 +232,17 @@ const Results = ({ globals }) => {
     if (!k) return null;
     const rawPhysics = physics[k.load] || physics['NoLoad'] || {};
     const sanitizedPhysics = {};
-    Object.keys(rawPhysics).forEach(key => {
-      sanitizedPhysics[key] = typeof rawPhysics[key] === 'boolean' ? rawPhysics[key] : parseFloat(rawPhysics[key]) || 0;
+    const keys = [...new Set([...Object.keys(rawPhysics), 'field_method'])];
+    keys.forEach(key => {
+      let val = rawPhysics[key];
+      if (key === 'field_method') {
+        sanitizedPhysics[key] = val || 'union';
+      } else if (typeof val === 'boolean') {
+        sanitizedPhysics[key] = val;
+      } else {
+        // Numeric value from input field (often string in state)
+        sanitizedPhysics[key] = parseFloat(val) || 0;
+      }
     });
     return {
       footprint_wkt: geometry.FootPrint,
@@ -271,16 +294,32 @@ const Results = ({ globals }) => {
         return;
       }
       if (e.key === 'Escape') {
+         // Exit mask edit — revert to snapshot
+         if (isEditingMask) {
+           if (originalMaskWkt.current !== null) {
+             const revertWkt = originalMaskWkt.current;
+             setResults(prev => {
+               const updated = { ...prev };
+               Object.keys(updated).forEach(id => {
+                 if (updated[id]) updated[id] = { ...updated[id], ignored_wkt: revertWkt };
+               });
+               return updated;
+             });
+             originalMaskWkt.current = null;
+           }
+           setIsEditingMask(false);
+           return;
+         }
          if (isEditMode && resultsMode === 'cad') {
             if (activeTool !== 'select') {
                setActiveTool('select');
-               return; // Only cancel tool
+               return;
             }
             if (targetSketches.length > 0) {
                if (window.confirm("Save sketched shapes before exiting?")) {
                   const { wkt, error } = sketchesToWkt(targetSketches, SCALE_M);
                   if (error) {
-                    alert(`⚠️ Finalize Rejected:\n\n${error}`);
+                    alert(`Finalize Rejected:\n\n${error}`);
                     return;
                   }
                   if (wkt) setResults(prev => ({ ...prev, [selectedCaseId]: { ...prev[selectedCaseId], final_field_wkt: wkt }}));
@@ -295,7 +334,7 @@ const Results = ({ globals }) => {
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [isEditMode, resultsMode, activeTool, targetSketches, selectedCaseId, setResults, setCadFieldSafe, setActiveTool]);
+  }, [isEditingMask, isEditMode, resultsMode, activeTool, targetSketches, selectedCaseId, setResults, setCadFieldSafe, setActiveTool]);
 
   const lidarList = currentResult?.lidars || [];
   const activeLidar = lidarList.find(l => l.name === selectedLidar) || lidarList[0] || null;
@@ -345,9 +384,34 @@ const Results = ({ globals }) => {
   const parsedLidarClip = (viewMode === 'LiDAR View' && activeLidar?.clip_wkt) ? parseWktWithTransform(activeLidar.clip_wkt, tObj.fn) : [];
   const parsedSweeps = (viewMode === 'Sweep Steps' && currentResult?.sweeps) ? currentResult.sweeps.flatMap(s => parseWktToKonva(s)) : [];
 
+  // Client-side convex hull of all sweep vertices (Andrew's monotone chain) — always shown in Sweep Steps
+  const sweepHullPoints = (() => {
+    if (viewMode !== 'Sweep Steps' || parsedSweeps.length === 0) return null;
+    const pts = [];
+    parsedSweeps.forEach(poly => {
+      for (let i = 0; i < poly.length; i += 2) pts.push([poly[i], poly[i + 1]]);
+    });
+    if (pts.length < 3) return null;
+    pts.sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1]);
+    const cross = (o, a, b) => (a[0]-o[0])*(b[1]-o[1]) - (a[1]-o[1])*(b[0]-o[0]);
+    const lower = [], upper = [];
+    for (const p of pts) {
+      while (lower.length >= 2 && cross(lower[lower.length-2], lower[lower.length-1], p) <= 0) lower.pop();
+      lower.push(p);
+    }
+    for (let i = pts.length - 1; i >= 0; i--) {
+      const p = pts[i];
+      while (upper.length >= 2 && cross(upper[upper.length-2], upper[upper.length-1], p) <= 0) upper.pop();
+      upper.push(p);
+    }
+    upper.pop(); lower.pop();
+    return [...lower, ...upper].flat();
+  })();
+
   const worldToCanvas = (x, y) => [x * SCALE, -y * SCALE];
-  const trajCanvas = (showArc && (viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && currentResult?.traj) ? currentResult.traj.map(p => worldToCanvas(p[0], p[1])).flat() : null;
-  const frontTrajCanvas = (showArc && (viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && currentResult?.front_traj) ? currentResult.front_traj.map(p => worldToCanvas(p[0], p[1])).flat() : null;
+  const showTraj = showArc && currentResult?.traj;
+  const trajCanvas = (showTraj && (viewMode === 'Composite' || viewMode === 'Sweep Steps' || (viewMode === 'LiDAR View' && showComposite))) ? currentResult.traj.map(p => worldToCanvas(p[0], p[1])).flat() : null;
+  const frontTrajCanvas = (showTraj && (viewMode === 'Composite' || viewMode === 'Sweep Steps' || (viewMode === 'LiDAR View' && showComposite))) ? currentResult.front_traj?.map(p => worldToCanvas(p[0], p[1])).flat() || null : null;
 
   const handlePointDrag = (polyIdx, pIdx, newX, newY) => {
     if (!currentResult?.final_field_wkt) return;
@@ -404,6 +468,60 @@ const Results = ({ globals }) => {
     setResults(prev => ({ ...prev, [selectedCaseId]: { ...prev[selectedCaseId], final_field_wkt: wktStr } }));
   };
 
+  // --- Mask (ignored_wkt) editing helpers ---
+  const syncMaskToWkt = (rawPolys) => {
+    const isMulti = rawPolys.length > 1;
+    let wktStr = isMulti ? "MULTIPOLYGON(" : "POLYGON(";
+    rawPolys.forEach((poly, idx) => {
+      let pts = "";
+      for (let i = 0; i < poly.length; i += 2) {
+        pts += `${(poly[i] / SCALE).toFixed(4)} ${(-poly[i + 1] / SCALE).toFixed(4)}${idx === rawPolys.length - 1 && i === poly.length - 2 ? "" : i === poly.length - 2 ? "" : ", "}`;
+      }
+      wktStr += isMulti ? `((${pts}))${idx === rawPolys.length - 1 ? "" : ", "}` : `(${pts})`;
+    });
+    wktStr += ")";
+    // Apply to ALL results so the mask is global across every case
+    setResults(prev => {
+      const updated = { ...prev };
+      Object.keys(updated).forEach(id => {
+        if (updated[id]) updated[id] = { ...updated[id], ignored_wkt: wktStr };
+      });
+      return updated;
+    });
+  };
+
+  const handleMaskPointDrag = (polyIdx, pIdx, newX, newY) => {
+    if (!currentResult?.ignored_wkt) return;
+    const raw = parseWktToKonva(currentResult.ignored_wkt);
+    const poly = [...raw[polyIdx]];
+    poly[pIdx * 2] = newX; poly[pIdx * 2 + 1] = newY;
+    if (pIdx === 0 || pIdx === (poly.length / 2) - 1) {
+      const last = (poly.length / 2) - 1;
+      poly[0] = poly[last * 2] = newX; poly[1] = poly[last * 2 + 1] = newY;
+    }
+    raw[polyIdx] = poly;
+    syncMaskToWkt(raw);
+  };
+
+  const handleMaskPointDelete = (polyIdx, pIdx) => {
+    if (!currentResult?.ignored_wkt) return;
+    const raw = parseWktToKonva(currentResult.ignored_wkt);
+    const poly = [...raw[polyIdx]];
+    if (poly.length <= 8) { alert("Cannot delete vertex: minimum 3 vertices required."); return; }
+    const newPoly = [];
+    for (let i = 0; i < poly.length / 2; i++) {
+      if (i === pIdx) continue;
+      newPoly.push(poly[i * 2], poly[i * 2 + 1]);
+    }
+    if (pIdx === 0 || pIdx === (poly.length / 2) - 1) {
+      const lastIdx = (newPoly.length / 2) - 1;
+      newPoly[0] = newPoly[lastIdx * 2];
+      newPoly[1] = newPoly[lastIdx * 2 + 1];
+    }
+    raw[polyIdx] = newPoly;
+    syncMaskToWkt(raw);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', background: '#111', overflow: 'hidden' }}>
       
@@ -458,6 +576,27 @@ const Results = ({ globals }) => {
         )}
 
         <div style={{ width: 1, background: '#333', height: 16 }} />
+
+        {/* Visibility Toggles */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#151515', padding: '4px 12px', borderRadius: 20, border: '1px solid #333', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#aaa', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 'bold' }}>
+            <input type="checkbox" checked={showFootprint} onChange={e => setShowFootprint(e.target.checked)} style={{ accentColor: '#00e5ff', width: 12, height: 12 }} /> FP
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#aaa', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 'bold' }}>
+            <input type="checkbox" checked={showLoad1} onChange={e => setShowLoad1(e.target.checked)} style={{ accentColor: '#00e5ff', width: 12, height: 12 }} /> L1
+          </label>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#aaa', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 'bold' }}>
+            <input type="checkbox" checked={showLoad2} onChange={e => setShowLoad2(e.target.checked)} style={{ accentColor: '#00e5ff', width: 12, height: 12 }} /> L2
+          </label>
+          {viewMode === 'Sweep Steps' && (
+            <>
+               <div style={{ width: 1, background: '#444', height: 12, margin: '0 4px' }} />
+               <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#ff9800', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 'bold' }}>
+                 <input type="checkbox" checked={fillSweeps} onChange={e => setFillSweeps(e.target.checked)} style={{ accentColor: '#ff9800', width: 12, height: 12 }} /> Shade Inside
+               </label>
+            </>
+          )}
+        </div>
 
         {viewMode === 'Composite' && isEditMode && (
           <div style={{ 
@@ -545,6 +684,38 @@ const Results = ({ globals }) => {
 
         <div style={{ flex: 1 }} />
 
+        {/* Edit Mask button — only in Composite view when a result exists */}
+        {viewMode === 'Composite' && currentResult?.ignored_wkt && (
+          <button
+            onClick={() => {
+              if (!isEditingMask) {
+                originalMaskWkt.current = currentResult.ignored_wkt;
+                setIsEditingMask(true);
+                setIsEditMode(false);
+              } else {
+                originalMaskWkt.current = null;
+                setIsEditingMask(false);
+              }
+            }}
+            title="Edit Mask (Gray No-FOV Region)"
+            style={{
+              background: isEditingMask ? '#4a1a1a' : '#222',
+              color: isEditingMask ? '#ff5252' : '#888',
+              border: isEditingMask ? '1px solid #ff5252' : '1px solid transparent',
+              padding: '4px 10px',
+              borderRadius: 4,
+              cursor: 'pointer',
+              fontSize: '0.65rem',
+              fontWeight: 'bold',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}
+          >
+            <span style={{ fontSize: '0.75rem' }}>⬛</span> {isEditingMask ? 'Done' : 'Edit Mask'}
+          </button>
+        )}
+
         <div style={{ display: 'flex', gap: 6 }}>
            <button onClick={() => setCaseListOpen(!caseListOpen)} title="Toggle Case List" style={{ background: caseListOpen ? '#1a3a5c' : '#222', color: '#ccc', border: 'none', padding: '5px', borderRadius: 4, cursor: 'pointer' }}><List size={14}/></button>
            <button onClick={() => setInspectorOpen(!inspectorOpen)} title="Toggle Inspector" style={{ background: inspectorOpen ? '#1a3a5c' : '#222', color: '#ccc', border: 'none', padding: '5px', borderRadius: 4, cursor: 'pointer' }}><Info size={14}/></button>
@@ -610,14 +781,14 @@ const Results = ({ globals }) => {
         {/* Case List Sidebar */}
         {caseListOpen && (
           <div style={{ width: 220, background: '#111', borderRight: '1px solid #222', overflowY: 'auto', padding: '10px 0' }}>
-            <div style={{ padding: '0 15px 10px', fontSize: '0.65rem', color: '#555', letterSpacing: 1, fontWeight: 'bold' }}>EVALUATION MATRIX</div>
+            <div style={{ padding: '0 15px 10px', fontSize: '0.65rem', color: '#888', letterSpacing: 1, fontWeight: 'bold' }}>EVALUATION MATRIX</div>
             {['NoLoad', 'Load1', 'Load2'].map(load => (
               <div key={load}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 15px', background: '#161616', color: '#888', fontSize: '0.7rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 15px', background: '#161616', color: '#aaa', fontSize: '0.7rem' }}>
                   <Database size={10} /> {load}
                 </div>
                 {evaluationCases.filter(c => c.load === load).map(c => (
-                  <div key={c.id} onClick={() => setSelectedCaseId(c.id)} style={{ padding: '10px 20px', cursor: 'pointer', background: c.id === selectedCaseId ? 'rgba(0,229,255,0.08)' : 'transparent', borderLeft: c.id === selectedCaseId ? '3px solid #00e5ff' : '3px solid transparent', color: c.id === selectedCaseId ? '#fff' : '#666' }}>
+                  <div key={c.id} onClick={() => setSelectedCaseId(c.id)} style={{ padding: '10px 20px', cursor: 'pointer', background: c.id === selectedCaseId ? 'rgba(0,229,255,0.08)' : 'transparent', borderLeft: c.id === selectedCaseId ? '3px solid #00e5ff' : '3px solid transparent', color: c.id === selectedCaseId ? '#fff' : '#aaa' }}>
                     <div style={{ fontSize: '0.8rem' }}>Case #{c.id}</div>
                     <div style={{ fontSize: '0.65rem', opacity: 0.6 }}>v={c.v} m/s | w={c.w} rad/s</div>
                   </div>
@@ -630,13 +801,18 @@ const Results = ({ globals }) => {
         {/* Canvas Area (Z-stacking alignment with SafetyStudio.py) */}
         <div style={{ flex: 1, position: 'relative' }}>
           
-          <GridCanvas stagePos={stagePos} onStagePosChange={setStagePos} draggable={!isEditMode}>
+          <GridCanvas stagePos={stagePos} onStagePosChange={setStagePos} draggable={!isEditMode || activeTool === 'select'}>
             {({ scale, setOverlay }) => (
               <Layer>
                 {/* 1. Static Sweeps (Z -10 equivalent) */}
                 {viewMode === 'Sweep Steps' && parsedSweeps.map((poly, i) => (
-                  <Line key={`sw-${i}`} points={poly} fill="rgba(255,165,0,0.05)" closed />
+                  <Line key={`sw-${i}`} points={poly} fill={fillSweeps ? "rgba(255,165,0,0.05)" : "transparent"} stroke="rgba(255,165,0,0.4)" strokeWidth={1/scale} closed />
                 ))}
+
+                {/* 1b. Sweep Convex Hull Outline */}
+                {viewMode === 'Sweep Steps' && sweepHullPoints && (
+                  <Line points={sweepHullPoints} stroke="#00e5ff" strokeWidth={2/scale} fill="rgba(0,229,255,0.04)" dash={[6/scale, 4/scale]} closed />
+                )}
 
                 {/* 2. Ghost Field (Reference) */}
                 {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedIdeal.map((poly, i) => (
@@ -656,7 +832,7 @@ const Results = ({ globals }) => {
                 ))}
 
                 {/* 4. Base Footprint Outline (Z 10 equivalent) */}
-                {parseWktWithTransform(geometry.FootPrint, tObj.fn).map((poly, i) => (
+                {showFootprint && geometry.FootPrint && parseWktWithTransform(geometry.FootPrint, tObj.fn).map((poly, i) => (
                   <Line key={`fp-${i}`} points={poly} stroke="#fff" strokeWidth={1/scale} dash={[5/scale, 5/scale]} opacity={0.6} closed />
                 ))}
 
@@ -674,22 +850,43 @@ const Results = ({ globals }) => {
                    </Group>
                 )}
 
-                {/* 6. Load Outline (Z 20 - Green/Blue) */}
-                {viewMode !== 'Sweep Steps' && currentResult?.load_wkt && parseWktWithTransform(currentResult.load_wkt, tObj.fn).map((poly, i) => (
-                  <Line key={`load-${i}`} points={poly} stroke="#4CAF50" strokeWidth={2/scale} fill="rgba(76, 175, 80, 0.1)" closed />
-                ))}
+                {/* 6. Active Evaluated Load Outline (Z 20) */}
+                {viewMode !== 'Sweep Steps' && currentResult?.load_wkt && (
+                  (currentResult.load === 'Load1' && showLoad1) || 
+                  (currentResult.load === 'Load2' && showLoad2)
+                ) && parseWktWithTransform(currentResult.load_wkt, tObj.fn).map((poly, i) => {
+                  const isL2 = currentResult.load === 'Load2';
+                  return (
+                    <Line 
+                      key={`load-${i}`} 
+                      points={poly} 
+                      stroke={isL2 ? "#2196F3" : "#4CAF50"} 
+                      strokeWidth={2/scale} 
+                      dash={[5/scale, 5/scale]}
+                      fill={isL2 ? "rgba(33, 150, 243, 0.1)" : "rgba(76, 175, 80, 0.1)"} 
+                      closed 
+                    />
+                  );
+                })}
 
                 {/* 6. Ignored Area (Z 30 equivalent - Rendered Higher) */}
                 {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedIgnored.map((poly, i) => (
-                  <Line key={`ig-${i}`} points={poly} fill={IGNORED_GRAY_FILL} strokeWidth={0} closed />
+                  <Line
+                    key={`ig-${i}`}
+                    points={poly}
+                    fill={IGNORED_GRAY_FILL}
+                    stroke={isEditingMask ? '#ff5252' : 'transparent'}
+                    strokeWidth={isEditingMask ? 2/scale : 0}
+                    dash={isEditingMask ? [6/scale, 4/scale] : undefined}
+                    closed
+                  />
                 ))}
 
-                {/* 7. LiDAR Local View Overlay */}
                 {viewMode === 'LiDAR View' && parsedLidarClip.map((poly, i) => {
                   const lidarIdx = lidarList.findIndex(l => l.name === activeLidar?.name);
                   const lidarColor = LIDAR_COLORS[lidarIdx % LIDAR_COLORS.length] || FIELD_GOLD_FILL;
                   return (
-                    <Line key={`lc-${i}`} points={poly} fill={lidarColor} stroke="#00e5ff" strokeWidth={2/scale} closed />
+                    <Line key={`lc-${i}`} points={poly} fill={lidarColor} stroke={lidarColor} strokeWidth={2/scale} closed />
                   );
                 })}
 
@@ -707,26 +904,45 @@ const Results = ({ globals }) => {
                   );
                 })}
 
-                {/* 9. Interactive Handles (Top-most) */}
+                {/* 9a. Safety Field Handles */}
                 {isEditMode && resultsMode === 'polygon' && viewMode === 'Composite' && parsedField.map((poly, polyIdx) => {
-                   if (polyIdx !== 0) return null; // Restrict handles to safety field only, ignore shadows
+                   if (polyIdx !== 0) return null;
                    return (
                      <Group key={`edit-${polyIdx}`}>
                        {Array.from({ length: poly.length / 2 }).map((_, pIdx) => {
                          if (pIdx === (poly.length / 2) - 1) return null;
                          return (
-                           <Circle key={`h-${pIdx}`} x={poly[pIdx*2]} y={poly[pIdx*2+1]} radius={6/scale} fill="#ff1744" stroke="#fff" strokeWidth={2/scale} draggable 
-                             onDragMove={(e) => handlePointDrag(polyIdx, pIdx, e.target.x(), e.target.y())} 
-                             onContextMenu={(e) => {
-                               e.evt.preventDefault();
-                               handlePointDelete(polyIdx, pIdx);
-                             }}
+                           <Circle key={`h-${pIdx}`} x={poly[pIdx*2]} y={poly[pIdx*2+1]} radius={6/scale} fill="#ff1744" stroke="#fff" strokeWidth={2/scale} draggable
+                             onDragMove={(e) => handlePointDrag(polyIdx, pIdx, e.target.x(), e.target.y())}
+                             onContextMenu={(e) => { e.evt.preventDefault(); handlePointDelete(polyIdx, pIdx); }}
                            />
                          );
                        })}
                      </Group>
                    );
                 })}
+
+                {/* 9b. Mask (Ignored) Handles */}
+                {isEditingMask && viewMode === 'Composite' && parsedIgnored.map((poly, polyIdx) => (
+                  <Group key={`mask-edit-${polyIdx}`}>
+                    {Array.from({ length: poly.length / 2 }).map((_, pIdx) => {
+                      if (pIdx === (poly.length / 2) - 1) return null;
+                      return (
+                        <Circle
+                          key={`mh-${pIdx}`}
+                          x={poly[pIdx * 2]} y={poly[pIdx * 2 + 1]}
+                          radius={6/scale}
+                          fill="#ff5252"
+                          stroke="#fff"
+                          strokeWidth={2/scale}
+                          draggable
+                          onDragMove={(e) => handleMaskPointDrag(polyIdx, pIdx, e.target.x(), e.target.y())}
+                          onContextMenu={(e) => { e.evt.preventDefault(); handleMaskPointDelete(polyIdx, pIdx); }}
+                        />
+                      );
+                    })}
+                  </Group>
+                ))}
 
                 {/* 10. CAD Sketcher */}
                 {isEditMode && resultsMode === 'cad' && draftCad && (() => {
@@ -741,6 +957,7 @@ const Results = ({ globals }) => {
 
                   return (
                     <CADSketcher 
+                      ref={cadRef}
                       sketches={draftCad.sketches} 
                       setSketches={(v) => {
                          const updated = typeof v === 'function' ? v(draftCad.sketches) : v;

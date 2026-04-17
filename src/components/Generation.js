@@ -38,7 +38,7 @@ const SectionHeader = ({ icon: Icon, title, subtitle }) => (
 );
 
 const Generation = ({ globals }) => {
-  const { physics, setPhysics, evaluationCases, setEvaluationCases, genConfig, setGenConfig, genSync: sync, setGenSync: setSync, geometry, results, setResults } = globals;
+  const { physics, setPhysics, evaluationCases, setEvaluationCases, genConfig, setGenConfig, genSync: sync, setGenSync: setSync, geometry, results, setResults, maxFields } = globals;
 
   const fileInputRef = useRef(null);
   const [activeCaseId, setActiveCaseId] = useState(null);
@@ -70,62 +70,52 @@ const Generation = ({ globals }) => {
       const c = genConfig[load];
       if (!c.enabled) return;
 
-      let rem = parseInt(c.cnt) || 0;
-      if (c.ip && rem > 0) {
-        const ipW = parseFloat(c.w) || 0;
-        newCases.push({ id: idCounter++, load, v: 0.0, w: ipW, custom_dxf: null });
-        rem--;
-        if (rem > 0) {
-          newCases.push({ id: idCounter++, load, v: 0.0, w: -ipW, custom_dxf: null });
-          rem--;
-        }
+      const levels = parseInt(c.levels) || 1;
+      const vMax = parseFloat(c.v) || 0;
+      const vMin = parseFloat(c.minV) || 0;
+      const vW   = parseFloat(c.w) || 0;
+      const vRevMax = parseFloat(c.revV) || 0;
+
+      // Actual step calculation: from minV to vMax in 'levels' segments
+      const vRange = vMax - vMin;
+      const vStep = levels > 0 ? vRange / levels : 0;
+      
+      const vRevRange = vRevMax - vMin;
+      const vRevStep = levels > 0 ? vRevRange / levels : 0;
+
+      // 1. Handle In-Place Rotation / Idle (v=0)
+      if (c.idle) {
+        newCases.push({ id: idCounter++, load, v: 0.0, w: 0.0, custom_dxf: null, type: 'std' });
+      }
+      if (c.ip) {
+        newCases.push({ id: idCounter++, load, v: 0.0, w: vW, custom_dxf: null, type: 'std' });
+        newCases.push({ id: idCounter++, load, v: 0.0, w: parseFloat((-vW).toFixed(2)), custom_dxf: null, type: 'std' });
       }
 
-      const modesPerLevel = ((c.fwd ? 1 : 0) + (c.turn ? 2 : 0)) * (c.rev ? 2 : 1);
-      if (modesPerLevel === 0 || rem <= 0) return;
+      // 2. Generate levels
+      for (let i = 0; i <= levels; i++) {
+        const currV = parseFloat((vMin + i * vStep).toFixed(2));
+        const currRevV = parseFloat((vMin + i * vRevStep).toFixed(2));
+        
+        // Skip v=0 here if it was already handled by IP or if it's the start of the loop
+        if (currV === 0 && c.ip) continue;
 
-      const steps = Math.ceil(rem / modesPerLevel);
-      const vLimit = parseFloat(c.v) || 0;
-      const vMin   = parseFloat(c.minV) || 0;
-      const vW     = parseFloat(c.w) || 0;
-      const vRev   = parseFloat(c.revV) || 0;
-
-      const vRange = vLimit - vMin;
-      const vStep = steps > 1 ? vRange / (steps - 1) : 0;
-      const revRange = vRev - vMin;
-      const revStep = steps > 1 ? revRange / (steps - 1) : 0;
-
-      let currV = vMin;
-      let currRevV = vMin;
-
-      for (let i = 0; i < steps; i++) {
-        if (c.fwd && rem > 0) {
-          newCases.push({ id: idCounter++, load, v: parseFloat(currV.toFixed(2)), w: 0.0, custom_dxf: null, type: 'std' });
-          rem--;
-          if (c.rev && rem > 0) {
+        if (c.fwd) {
+          newCases.push({ id: idCounter++, load, v: currV, w: 0.0, custom_dxf: null, type: 'std' });
+          if (c.rev) {
             newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: 0.0, custom_dxf: null, type: 'std' });
-            rem--;
           }
         }
-        if (c.turn && rem > 0) {
+        if (c.turn) {
           const wVal = parseFloat(vW.toFixed(2));
-          newCases.push({ id: idCounter++, load, v: parseFloat(currV.toFixed(2)), w: wVal, custom_dxf: null, type: 'std' });
-          rem--;
-          if (c.rev && rem > 0) {
+          newCases.push({ id: idCounter++, load, v: currV, w: wVal, custom_dxf: null, type: 'std' });
+          newCases.push({ id: idCounter++, load, v: currV, w: parseFloat((-wVal).toFixed(2)), custom_dxf: null, type: 'std' });
+          
+          if (c.rev) {
             newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: wVal, custom_dxf: null, type: 'std' });
-            rem--;
+            newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: parseFloat((-wVal).toFixed(2)), custom_dxf: null, type: 'std' });
           }
         }
-        if (c.turn && rem > 0) {
-          const wVal = parseFloat((-vW).toFixed(2));
-          newCases.push({ id: idCounter++, load, v: parseFloat(currV.toFixed(2)), w: wVal, custom_dxf: null, type: 'std' });
-          rem--;
-          if (c.rev && rem > 0) {
-            newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: wVal, custom_dxf: null, type: 'std' });
-            rem--;
-          }
-        }
-        currV += vStep; currRevV += revStep;
       }
     });
 
@@ -137,13 +127,40 @@ const Generation = ({ globals }) => {
       return a.w - b.w;
     });
 
-    // Re-assign IDs based on sorted order
-    const finalCases = newCases.map((c, i) => ({ ...c, id: i + 1 }));
+    setEvaluationCases(newCases.map((c, i) => ({ ...c, id: i + 1 })));
 
-    setEvaluationCases(finalCases);
+    if (newCases.length > maxFields) {
+      alert(`Warning: Generated ${newCases.length} cases, but your global LiDAR capacity is only ${maxFields}. You may not be able to map all of them to fieldsets.`);
+    }
+  };
+
+  const handleScaleToHardware = () => {
+    const activeLoadsCount = ['NoLoad', 'Load1', 'Load2'].filter(l => genConfig[l].enabled).length;
+    if (activeLoadsCount === 0) return;
+    
+    const budgetPerLoad = Math.floor(maxFields / activeLoadsCount);
+
+    ['NoLoad', 'Load1', 'Load2'].forEach(load => {
+       if (!genConfig[load].enabled) return;
+       const c = genConfig[load];
+       // Modes per level: (fwd:1 + turn:2) * (rev:2 if rev else 1)
+       const modesPerLevel = ((c.fwd ? 1 : 0) + (c.turn ? 2 : 0)) * (c.rev ? 2 : 1);
+       if (modesPerLevel === 0) return;
+       
+       const ipCount = (c.ip ? 2 : 0) + (c.idle ? 1 : 0);
+       
+       const calculatedLevels = Math.floor((budgetPerLoad - ipCount) / modesPerLevel) - 1;
+       handleGenConfigChange(load, 'levels', Math.max(0, calculatedLevels));
+    });
+    alert(`Generation levels adjusted to fit hardware capacity (${maxFields} fields).`);
   };
 
   const handleAddMiscCase = () => {
+    if (evaluationCases.length >= maxFields) {
+      if (!window.confirm(`Global hardware capacity reached (${maxFields}). Adding more cases might exceed your hardware limit. Proceed anyway?`)) {
+        return;
+      }
+    }
     const nextId = evaluationCases.length > 0 ? Math.max(...evaluationCases.map(k => k.id)) + 1 : 1;
     setEvaluationCases([...evaluationCases, { id: nextId, load: 'Misc', v: 0.0, w: 0.0, custom_dxf: null, type: 'misc' }]);
   };
@@ -269,6 +286,38 @@ const Generation = ({ globals }) => {
                 ))}
                 {/* Divider */}
                 <tr><td colSpan="4"><div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', margin: '6px 0' }} /></td></tr>
+                {/* String/Dropdown rows */}
+                <tr>
+                  <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>Field Method</td>
+                  {['NoLoad', 'Load1', 'Load2'].map(load => (
+                    <td key={load} style={{ padding: '0 4px' }}>
+                      <select 
+                        className="modern-select" 
+                        value={physics[load].field_method || 'union'}
+                        onChange={e => handlePhysicsChange(load, 'field_method', e.target.value)}
+                        disabled={load !== 'NoLoad' && !physics[load].enabled}
+                        style={{ opacity: (load !== 'NoLoad' && !physics[load].enabled) ? 0.2 : 1, fontSize: '0.7rem' }}
+                      >
+                        <option value="union">Sweep Union</option>
+                        <option value="hull">Convex Hull</option>
+                        <option value="hybrid">Hybrid (Auto-Hull)</option>
+                      </select>
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>Hull Threshold (m)</td>
+                  {['NoLoad', 'Load1', 'Load2'].map(load => (
+                    <td key={load} style={{ padding: '0 4px' }}>
+                      <ModernInput
+                        value={physics[load].hull_threshold || 0.5}
+                        onChange={e => handlePhysicsChange(load, 'hull_threshold', e.target.value)}
+                        disabled={load !== 'NoLoad' && !physics[load].enabled}
+                        style={{ opacity: (load !== 'NoLoad' && !physics[load].enabled) ? 0.2 : 1 }}
+                      />
+                    </td>
+                  ))}
+                </tr>
                 {/* Checkbox rows */}
                 {[
                   { lbl: 'Shadow Zones', k: 'shadow', naFor: 'NoLoad' },
@@ -307,8 +356,8 @@ const Generation = ({ globals }) => {
             <SectionHeader icon={Sliders} title="MATRIX GENERATOR" subtitle="Auto-populate evaluation cases" />
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <div style={{ fontSize: '0.7rem', color: '#555', fontWeight: 700 }}>SYNC COLUMNS</div>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: sync ? '#00e5ff' : '#666', cursor: 'pointer', transition: 'all 0.2s' }}>
+              <div style={{ fontSize: '0.7rem', color: '#888', fontWeight: 700 }}>SYNC COLUMNS</div>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '0.75rem', color: sync ? '#00e5ff' : '#888', cursor: 'pointer', transition: 'all 0.2s' }}>
                 <input type="checkbox" checked={sync} onChange={e => setSync(e.target.checked)}
                   style={{ accentColor: '#00e5ff', width: 14, height: 14, cursor: 'pointer' }} />
                 Sync All
@@ -317,7 +366,7 @@ const Generation = ({ globals }) => {
 
             <table style={{ width: '100%', borderCollapse: 'separate', borderSpacing: '0 4px' }}>
               <thead>
-                <tr style={{ fontSize: '0.65rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                <tr style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
                   <th style={{ textAlign: 'left', paddingBottom: 8 }}>Param</th>
                   <th style={{ textAlign: 'center', paddingBottom: 8 }}>No Load</th>
                   <th style={{ textAlign: 'center', paddingBottom: 8 }}>
@@ -341,15 +390,15 @@ const Generation = ({ globals }) => {
               <tbody>
                 {/* Numeric params */}
                 {[
-                  { lbl: 'Case Count', k: 'cnt', icon: Database },
+                  { lbl: 'Intensity Levels', k: 'levels', icon: Database },
                   { lbl: 'Max Fwd v (m/s)', k: 'v', icon: Zap },
                   { lbl: 'Max Rev v (m/s)', k: 'revV', icon: History },
                   { lbl: 'Min v (m/s)', k: 'minV', icon: Minus },
                   { lbl: 'Max Ang w (rad/s)', k: 'w', icon: Settings2 },
                 ].map(row => (
                   <tr key={row.k}>
-                    <td style={{ color: '#aaa', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 6, height: 36 }}>
-                      <row.icon size={12} color="#444" /> {row.lbl}
+                    <td style={{ color: '#ccc', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 6, height: 36 }}>
+                      <row.icon size={12} color="#666" /> {row.lbl}
                     </td>
                     {['NoLoad', 'Load1', 'Load2'].map(load => (
                       <td key={load} style={{ padding: '0 4px' }}>
@@ -363,20 +412,42 @@ const Generation = ({ globals }) => {
                     ))}
                   </tr>
                 ))}
+                {/* Derived Params */}
+                <tr>
+                  <td style={{ color: '#00e5ff', fontSize: '0.65rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, height: 32 }}>
+                    <Activity size={12} /> EFFECTIVE STEP
+                  </td>
+                  {['NoLoad', 'Load1', 'Load2'].map(load => {
+                    const c = genConfig[load];
+                    const vRange = (parseFloat(c.v) || 0) - (parseFloat(c.minV) || 0);
+                    const step = (parseInt(c.levels) || 1) > 0 ? vRange / (parseInt(c.levels) || 1) : 0;
+                    return (
+                      <td key={load} style={{ textAlign: 'center', color: '#888', fontSize: '0.7rem', fontWeight: 700 }}>
+                         {c.enabled ? `${step.toFixed(3)} m/s` : '---'}
+                      </td>
+                    );
+                  })}
+                </tr>
                 {/* Divider */}
                 <tr><td colSpan="4"><div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', margin: '6px 0' }} /></td></tr>
                 <tr>
-                  <td colSpan="4" style={{ fontSize: '0.65rem', color: '#444', textTransform: 'uppercase', letterSpacing: '0.1em', paddingBottom: 4 }}>Motion Types</td>
+                  <td colSpan="4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 4 }}>
+                    <span style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Motion Types</span>
+                    <button onClick={handleScaleToHardware} style={{ background: 'rgba(0,229,255,0.1)', color: '#00e5ff', border: '1px solid rgba(0,229,255,0.2)', padding: '2px 8px', borderRadius: 4, fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer' }}>
+                      SCALE TO HARDWARE
+                    </button>
+                  </td>
                 </tr>
                 {/* Motion checkboxes */}
                 {[
                   { lbl: 'Forward Linear', k: 'fwd' },
                   { lbl: 'Curve / Turn', k: 'turn' },
                   { lbl: 'In-place Rotate', k: 'ip' },
+                  { lbl: 'Idle (Stop)', k: 'idle' },
                   { lbl: 'Reverse', k: 'rev' },
                 ].map(row => (
                   <tr key={row.k}>
-                    <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>{row.lbl}</td>
+                    <td style={{ color: '#ccc', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>{row.lbl}</td>
                     {['NoLoad', 'Load1', 'Load2'].map(load => {
                       const disabled = load !== 'NoLoad' && !genConfig[load].enabled;
                       return (

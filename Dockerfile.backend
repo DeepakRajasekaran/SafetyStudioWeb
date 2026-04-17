@@ -17,6 +17,8 @@ RUN pip install --no-cache-dir gunicorn
 # Copy backend source files
 COPY core.py .
 COPY app.py .
+COPY caseExport.py .
+COPY exampleCases.casesxml .
 COPY SafetyStudio/assets ./SafetyStudio/assets
 
 EXPOSE 5000
