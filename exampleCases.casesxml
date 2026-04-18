@@ -1,0 +1,178 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<SdImportExport xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" Timestamp="2026-04-16T06:36:02.4836638Z" Hash="38B6241F8FE9194A49B653F0A05380ACF806B3EEDA379D265CBAC0BA421643E28195BB1870A45E47F40350EDCA64DC77DF42A997DA4A852136855A65D7255B26">
+  <FileInfo>
+    <ContentId>Scanner CaseTable Export</ContentId>
+    <ContentVersion>6.0</ContentVersion>
+    <Company>SICK AG</Company>
+    <CreationToolName>SAFETY DESIGNER ENGINEERING TOOL</CreationToolName>
+    <CreationToolVersion>2025.03</CreationToolVersion>
+    <CreationComponentName>nanoScan3</CreationComponentName>
+    <CreationComponentVersion>1.20.24395.0</CreationComponentVersion>
+  </FileInfo>
+  <Configuration>
+    <Name>Monitoring case table 1</Name>
+    <StaticInputSource>
+      <Source>StaticInputSource_LocalIo</Source>
+      <StaticActivation>Antivalent</StaticActivation>
+    </StaticInputSource>
+    <StaticInputs>
+      <StaticInput>
+        <Ranking>2</Ranking>
+        <Evaluate>false</Evaluate>
+      </StaticInput>
+      <StaticInput>
+        <Ranking>1</Ranking>
+        <Evaluate>false</Evaluate>
+      </StaticInput>
+      <StaticInput>
+        <Ranking>3</Ranking>
+        <Evaluate>true</Evaluate>
+      </StaticInput>
+      <StaticInput>
+        <Ranking>4</Ranking>
+        <Evaluate>true</Evaluate>
+      </StaticInput>
+      <StaticInput>
+        <Ranking>5</Ranking>
+        <Evaluate>true</Evaluate>
+      </StaticInput>
+      <StaticInput>
+        <Ranking>6</Ranking>
+        <Evaluate>true</Evaluate>
+      </StaticInput>
+    </StaticInputs>
+    <UseSpeed>false</UseSpeed>
+    <InputDelay>12</InputDelay>
+    <CaseSequenceEnabled>false</CaseSequenceEnabled>
+    <ShowPermanentPreset>false</ShowPermanentPreset>
+  </Configuration>
+  <Cases>
+    <Case Id="0">
+      <Name>Monitoring case 1</Name>
+      <SleepMode>false</SleepMode>
+      <DisplayOrder>0</DisplayOrder>
+      <Activation>
+        <StaticInputs>
+          <StaticInput>
+            <Match>DontCare</Match>
+          </StaticInput>
+          <StaticInput>
+            <Match>DontCare</Match>
+          </StaticInput>
+          <StaticInput>
+            <Match>High</Match>
+          </StaticInput>
+          <StaticInput>
+            <Match>High</Match>
+          </StaticInput>
+          <StaticInput>
+            <Match>High</Match>
+          </StaticInput>
+          <StaticInput>
+            <Match>High</Match>
+          </StaticInput>
+        </StaticInputs>
+        <StaticInputs1ofNIndex>-1</StaticInputs1ofNIndex>
+        <SpeedActivation>Off</SpeedActivation>
+        <MinSpeed>0</MinSpeed>
+        <MaxSpeed>0</MaxSpeed>
+        <CaseNumber>1</CaseNumber>
+        <FollowingCases>
+          <FollowingCase>
+            <CaseIndex>-1</CaseIndex>
+          </FollowingCase>
+          <FollowingCase>
+            <CaseIndex>-1</CaseIndex>
+          </FollowingCase>
+        </FollowingCases>
+        <SingleStepSequencePos>-1</SingleStepSequencePos>
+      </Activation>
+    </Case>
+  </Cases>
+  <Evals>
+    <Eval Id="1">
+      <Name>Cut-off path 1</Name>
+      <OSSDs>
+        <OSSD>
+          <Ranking>1</Ranking>
+          <Use>false</Use>
+        </OSSD>
+        <OSSD>
+          <Ranking>2</Ranking>
+          <Use>false</Use>
+        </OSSD>
+      </OSSDs>
+      <UniIos>
+        <UniIo>
+          <Ranking>1</Ranking>
+          <Use>false</Use>
+        </UniIo>
+        <UniIo>
+          <Ranking>2</Ranking>
+          <Use>false</Use>
+        </UniIo>
+        <UniIo>
+          <Ranking>3</Ranking>
+          <Use>false</Use>
+        </UniIo>
+        <UniIo>
+          <Ranking>4</Ranking>
+          <Use>false</Use>
+        </UniIo>
+      </UniIos>
+      <Q>1</Q>
+      <Reset>
+        <ResetType>NoReset</ResetType>
+        <AutoResetTime>2</AutoResetTime>
+        <EvalResetSource>EvalResetSource_None</EvalResetSource>
+      </Reset>
+      <Cases>
+        <Case Id="0">
+          <ScanPlanes>
+            <ScanPlane Id="1">
+              <UserFieldId>2</UserFieldId>
+              <IsSplitted>false</IsSplitted>
+            </ScanPlane>
+          </ScanPlanes>
+        </Case>
+      </Cases>
+      <PermanentPreset>
+        <ScanPlanes>
+          <ScanPlane Id="1">
+            <FieldMode>2</FieldMode>
+          </ScanPlane>
+        </ScanPlanes>
+      </PermanentPreset>
+    </Eval>
+  </Evals>
+  <FieldsConfiguration>
+    <ScanPlanes>
+      <ScanPlane Id="1">
+        <Index>0</Index>
+        <Name>Monitoring plane 1</Name>
+        <UserFieldsets>
+          <UserFieldset Id="1">
+            <Index>0</Index>
+            <Name>Field set (1)</Name>
+            <UserFields>
+              <UserField Id="1">
+                <Index>0</Index>
+                <Name>Field (1)</Name>
+                <FieldType>ProtectiveSafeBlanking</FieldType>
+                <MultipleSampling>2</MultipleSampling>
+                <ObjectResolution>70</ObjectResolution>
+                <ContourNegative>0</ContourNegative>
+                <ContourPositive>0</ContourPositive>
+              </UserField>
+            </UserFields>
+          </UserFieldset>
+        </UserFieldsets>
+      </ScanPlane>
+    </ScanPlanes>
+    <StatFields>
+      <PermRed Id="2" />
+      <PermGreen Id="3" />
+      <PermGreenWf Id="4" />
+    </StatFields>
+  </FieldsConfiguration>
+</SdImportExport>
