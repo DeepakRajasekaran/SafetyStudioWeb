@@ -32,7 +32,7 @@ import sys
 import os
 
 # ┌─────────────────────────────────────────────────────────────────────────┐
-# │ USER-EDITABLE PATHS – change these to match your project layout        │
+# │ USER-EDITABLE PATHS – change these to match your project layout         │
 # └─────────────────────────────────────────────────────────────────────────┘
 INPUT_SDXML = "LeftFront1.sdxml"                    # path to your .sdxml
 OUTPUT_CASESXML = "Monitoring case table 1.casesxml"  # desired output

@@ -203,6 +203,7 @@ class SafetyMath:
     def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None):
         try:
             # 1. Geometry Prep
+            sw_union = None
             raw_footprint_poly = footprint
             lat_scale = P.get('lat_scale', 1.0)
             if lat_scale != 1.0:
@@ -339,11 +340,17 @@ class SafetyMath:
             elif load_poly:
                 final = final.difference(load_poly)
                 
-            if final.geom_type in ('MultiPolygon', 'GeometryCollection'):
-                polys = [g for g in getattr(final, 'geoms', []) if g.geom_type == 'Polygon']
-                if polys: final = max(polys, key=lambda p: p.area)
-            if getattr(final, 'geom_type', None) == 'Polygon':
-                final = Polygon(final.exterior.coords)
+            if final and not final.is_empty:
+                # Support MultiPolygons (multiple disconnected field parts)
+                if final.geom_type in ('MultiPolygon', 'GeometryCollection'):
+                    polys = [g for g in getattr(final, 'geoms', []) if g.geom_type == 'Polygon']
+                    if polys: 
+                        # Return all polygons as a MultiPolygon instead of picking just the largest
+                        final = unary_union(polys)
+                
+                # Cleanup rings (discard holes if explicitly not wanted, but normally we keep them)
+                if final.geom_type == 'Polygon':
+                    final = Polygon(final.exterior.coords, final.interiors)
             
             front_traj = []
             for i in range(len(traj)):
@@ -356,4 +363,4 @@ class SafetyMath:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return None, str(e), [], [], 0.0, [], None
+            return None, str(e), [], [], 0.0, [], None, None

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { parse } from 'wellknown';
 import { Layer, Line, Circle, Group } from 'react-konva';
 import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Settings, Info, List, Database, Hammer, Minus, X, Download } from 'lucide-react';
 import axios from 'axios';
@@ -10,6 +11,7 @@ import CADSketcher from './CADSketcher';
 import ConstraintList from './ConstraintList';
 import { sketchesToWkt } from '../utils/cadToWkt';
 import { propagateConstraints } from '../utils/cadSolver';
+import { union, difference } from 'polygon-clipping';
 
 /** Helper to unwrap propagateConstraints result in Results.js */
 const runSolverResults = (sketches, constraints, dimensions, fixedPoints, SCALE_M, referenceVertices) => {
@@ -107,7 +109,10 @@ const Results = ({ globals }) => {
   const [caseListOpen, setCaseListOpen] = useState(true);
   const [inspectorOpen, setInspectorOpen] = useState(false);
   const [draftCad, setDraftCad] = useState(null);
+  const [cadHistory, setCadHistory] = useState([]); // local undo stack for draft CAD
+  const [previewFieldWkt, setPreviewFieldWkt] = useState(null); // live boolean result
   const [isGenOpen, setIsGenOpen] = useState(false);
+  const [cadSnapshot, setCadSnapshot] = useState(null);
 
   const targetSketches = cadData?.Overrides?.[selectedCaseId]?.sketches || [];
   const targetDimensions = cadData?.Overrides?.[selectedCaseId]?.dimensions || [];
@@ -115,38 +120,27 @@ const Results = ({ globals }) => {
   const targetConstraints = cadData?.Overrides?.[selectedCaseId]?.constraints || [];
 
   const cadRef = useRef(null);
+  const layerRef = useRef(null);
 
-
-  const handleExportJson = () => {
-    const exportData = {
-      geometry, sensors, physics, evaluationCases, fieldsets,
-      results: Object.fromEntries(
-        Object.entries(results).map(([id, data]) => [
-          id, { final_field_wkt: data?.final_field_wkt || data, load: data?.load, dist_d: data?.dist_d }
-        ])
-      )
-    };
-    const link = document.createElement('a');
-    link.href = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(exportData, null, 2));
-    link.download = 'safety_studio_config.json';
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
+  const handleCadUndo = () => {
+    if (cadHistory.length === 0) return;
+    const [last, ...remaining] = cadHistory;
+    try {
+      setDraftCad(JSON.parse(last));
+      setCadHistory(remaining);
+    } catch (e) {
+      console.error("CAD Undo failed", e);
+    }
   };
 
   const handleClearSketch = () => {
-    if (cadRef.current && cadRef.current.hasSelection) {
-      cadRef.current.deleteSelection();
-      return;
-    }
-    if (window.confirm("Are you sure you want to delete ALL sketches?")) {
+    if (confirm("Are you sure you want to clear all CAD sketches and constraints?")) {
       pushToHistory();
-      setCadFieldSafe('Overrides', selectedCaseId, 'sketches', []);
-      setCadFieldSafe('Overrides', selectedCaseId, 'dimensions', []);
-      setCadFieldSafe('Overrides', selectedCaseId, 'fixedPoints', []);
-      setCadFieldSafe('Overrides', selectedCaseId, 'constraints', []);
+      setDraftCad(prev => ({ ...prev, sketches: [], constraints: [], dimensions: [], fixedPoints: [] }));
     }
   };
+
+  const currentResult = results[selectedCaseId] || null;
 
   // --- Draft State Lifecycle ---
   useEffect(() => {
@@ -162,29 +156,39 @@ const Results = ({ globals }) => {
     }
   }, [selectedCaseId]);
 
-  // --- Draft State Lifecycle ---
   useEffect(() => {
     if (isEditMode && resultsMode === 'cad') {
-       setDraftCad({
+       setCadHistory([]); 
+       const init = {
           sketches: [...targetSketches],
           dimensions: [...targetDimensions],
           constraints: [...targetConstraints],
           fixedPoints: [...targetFixedPoints]
-       });
+       };
+       setDraftCad(init);
+       setCadSnapshot(JSON.stringify(init));
     } else {
        setDraftCad(null);
+       setCadHistory([]);
     }
   }, [isEditMode, resultsMode, selectedCaseId]);
 
   const handleSaveDraft = () => {
     if (!draftCad) return;
-    pushToHistory();
     setCadFieldSafe('Overrides', selectedCaseId, 'sketches', draftCad.sketches);
     setCadFieldSafe('Overrides', selectedCaseId, 'dimensions', draftCad.dimensions);
     setCadFieldSafe('Overrides', selectedCaseId, 'constraints', draftCad.constraints);
     setCadFieldSafe('Overrides', selectedCaseId, 'fixedPoints', draftCad.fixedPoints);
-    alert("Changes applied to session.");
   };
+
+  // (Auto-save removed to allow Transactional Ignore/Discard logic)
+  
+  // --- Force Canvas Redraw on State Change ---
+  useEffect(() => {
+    if (layerRef.current) {
+       layerRef.current.batchDraw();
+    }
+  }, [currentResult, draftCad, isEditMode, resultsMode, selectedCaseId]);
 
   // --- Auto-Resolve Synchronization (Draft Only) ---
   useEffect(() => {
@@ -228,6 +232,101 @@ const Results = ({ globals }) => {
     }
   }, [draftCad?.dimensions, draftCad?.constraints, draftCad?.fixedPoints, draftCad?.sketches, selectedCaseId]);
 
+  // --- Live Boolean Preview (union/subtract sketches onto the existing composite field) ---
+  useEffect(() => {
+    if (!isEditMode || resultsMode !== 'cad' || !draftCad) {
+      setPreviewFieldWkt(null);
+      return;
+    }
+    const baseWkt = currentResult?.final_field_wkt;
+    if (!baseWkt && (!draftCad.sketches || draftCad.sketches.length === 0)) {
+      setPreviewFieldWkt(null);
+      return;
+    }
+
+    const { wkt: sketchWkt, error } = sketchesToWkt(draftCad.sketches, SCALE_M);
+    if (error || !sketchWkt) {
+      // No valid sketch drawn yet — show base as-is
+      setPreviewFieldWkt(baseWkt || null);
+      return;
+    }
+
+    // Convert WKT strings to polygon-clipping MultiPolygon format [ Polygon, ... ]
+    // where Polygon is [ [ [x,y],... ], ... ] (exterior ring, then interior rings/holes)
+    const wktToRings = (wktStr) => {
+      if (!wktStr) return null;
+      const geojson = parse(wktStr);
+      if (!geojson) return null;
+
+      const results = [];
+      const processPolygon = (poly) => {
+        if (!Array.isArray(poly)) return;
+        results.push(poly.map(ring => {
+          return ring.map(pt => [pt[0], pt[1]]);
+        }));
+      };
+
+      if (geojson.type === 'Polygon' && geojson.coordinates) {
+        processPolygon(geojson.coordinates);
+      } else if (geojson.type === 'MultiPolygon' && geojson.coordinates) {
+        geojson.coordinates.forEach(processPolygon);
+      }
+      return results;
+    };
+
+    // Convert the sketch WKT into additive + subtractive shapes
+    const activeSketches = draftCad.sketches.filter(s => !s.construction);
+    const hasSubtract = activeSketches.some(s => s.op === 'subtract');
+    const hasUnion = activeSketches.some(s => s.op !== 'subtract');
+
+    try {
+      const baseRings = wktToRings(baseWkt);
+      let result = baseRings || [];
+
+      // Union additive shapes
+      if (hasUnion) {
+        const additiveSketches = activeSketches.filter(s => s.op !== 'subtract');
+        const { wkt: addWkt } = sketchesToWkt(additiveSketches, SCALE_M);
+        if (addWkt) {
+          const addRings = wktToRings(addWkt);
+          if (addRings) {
+            result = result.length > 0 ? union(result, addRings) : addRings;
+          }
+        }
+      }
+
+      // Subtract subtractive shapes
+      if (hasSubtract && result.length > 0) {
+        const subtractiveSketches = activeSketches.filter(s => s.op === 'subtract');
+        const { wkt: subWkt } = sketchesToWkt(subtractiveSketches, SCALE_M);
+        if (subWkt) {
+          const subRings = wktToRings(subWkt);
+          if (subRings) {
+            result = difference(result, subRings);
+          }
+        }
+      }
+
+      if (!result || result.length === 0) {
+        setPreviewFieldWkt(null);
+        return;
+      }
+
+      // Convert back to WKT
+      const fmt = (poly) => {
+        const rings = poly.map(ring => `(${ring.map(p => `${p[0].toFixed(4)} ${p[1].toFixed(4)}`).join(', ')})`);
+        return `(${rings.join(', ')})`;
+      };
+      const outWkt = result.length === 1
+        ? `POLYGON${fmt(result[0])}`
+        : `MULTIPOLYGON(${result.map(fmt).join(', ')})`;
+      setPreviewFieldWkt(outWkt);
+    } catch (err) {
+      console.warn('Preview boolean failed:', err);
+      setPreviewFieldWkt(baseWkt || null);
+    }
+  }, [draftCad, isEditMode, resultsMode, selectedCaseId, currentResult]);
+
   const buildPayload = (k) => {
     if (!k) return null;
     const rawPhysics = physics[k.load] || physics['NoLoad'] || {};
@@ -265,8 +364,8 @@ const Results = ({ globals }) => {
     };
   };
 
-  const handleCalculate = async () => {
-    const k = evaluationCases.find(c => c.id === selectedCaseId);
+  const handleCalculate = async (targetCaseArg = null) => {
+    const k = targetCaseArg || evaluationCases.find(c => c.id === selectedCaseId);
     if (!k || !geometry.FootPrint) return;
     setIsCalculating(true);
     try {
@@ -286,13 +385,20 @@ const Results = ({ globals }) => {
     setIsCalculating(false);
   };
 
-  const currentResult = results[selectedCaseId] || null;
 
   useEffect(() => {
     const handleEsc = (e) => {
       if (document.activeElement.tagName === 'INPUT' || document.activeElement.tagName === 'TEXTAREA') {
         return;
       }
+
+      // Handle Undo (Ctrl+Z) locally if in CAD mode
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && isEditMode && resultsMode === 'cad') {
+        e.preventDefault();
+        handleCadUndo();
+        return;
+      }
+
       if (e.key === 'Escape') {
          // Exit mask edit — revert to snapshot
          if (isEditingMask) {
@@ -310,31 +416,29 @@ const Results = ({ globals }) => {
            setIsEditingMask(false);
            return;
          }
+         
          if (isEditMode && resultsMode === 'cad') {
             if (activeTool !== 'select') {
                setActiveTool('select');
                return;
             }
-            if (targetSketches.length > 0) {
-               if (window.confirm("Save sketched shapes before exiting?")) {
-                  const { wkt, error } = sketchesToWkt(targetSketches, SCALE_M);
-                  if (error) {
-                    alert(`Finalize Rejected:\n\n${error}`);
-                    return;
-                  }
-                  if (wkt) setResults(prev => ({ ...prev, [selectedCaseId]: { ...prev[selectedCaseId], final_field_wkt: wkt }}));
-               } else {
-                  handleClearSketch();
-               }
+            // Transactional: Ignore changes on ESC
+            if (cadSnapshot) {
+               try {
+                 setDraftCad(JSON.parse(cadSnapshot));
+               } catch(e) {}
             }
+            setIsEditMode(false);
+            return;
          }
+         
          setIsEditMode(false);
          setActiveTool('select');
       }
     };
     window.addEventListener('keydown', handleEsc);
     return () => window.removeEventListener('keydown', handleEsc);
-  }, [isEditingMask, isEditMode, resultsMode, activeTool, targetSketches, selectedCaseId, setResults, setCadFieldSafe, setActiveTool]);
+  }, [isEditingMask, isEditMode, resultsMode, activeTool, cadSnapshot, setResults, setDraftCad, setActiveTool]);
 
   const lidarList = currentResult?.lidars || [];
   const activeLidar = lidarList.find(l => l.name === selectedLidar) || lidarList[0] || null;
@@ -415,6 +519,7 @@ const Results = ({ globals }) => {
 
   const handlePointDrag = (polyIdx, pIdx, newX, newY) => {
     if (!currentResult?.final_field_wkt) return;
+    pushToHistory();
     const raw = parseWktToKonva(currentResult.final_field_wkt);
     const poly = [...raw[polyIdx]];
     poly[pIdx * 2] = newX; poly[pIdx * 2 + 1] = newY;
@@ -428,6 +533,7 @@ const Results = ({ globals }) => {
 
   const handlePointDelete = (polyIdx, pIdx) => {
     if (!currentResult?.final_field_wkt) return;
+    pushToHistory();
     const raw = parseWktToKonva(currentResult.final_field_wkt);
     const poly = [...raw[polyIdx]];
     
@@ -451,6 +557,16 @@ const Results = ({ globals }) => {
     }
 
     raw[polyIdx] = newPoly;
+    syncPolyToWkt(raw);
+  };
+
+  const handleEdgeClick = (polyIdx, edgeIdx, x, y) => {
+    if (!currentResult?.final_field_wkt) return;
+    pushToHistory();
+    const raw = parseWktToKonva(currentResult.final_field_wkt);
+    const poly = [...raw[polyIdx]];
+    poly.splice((edgeIdx + 1) * 2, 0, x, y);
+    raw[polyIdx] = poly;
     syncPolyToWkt(raw);
   };
 
@@ -492,6 +608,7 @@ const Results = ({ globals }) => {
 
   const handleMaskPointDrag = (polyIdx, pIdx, newX, newY) => {
     if (!currentResult?.ignored_wkt) return;
+    pushToHistory();
     const raw = parseWktToKonva(currentResult.ignored_wkt);
     const poly = [...raw[polyIdx]];
     poly[pIdx * 2] = newX; poly[pIdx * 2 + 1] = newY;
@@ -505,6 +622,7 @@ const Results = ({ globals }) => {
 
   const handleMaskPointDelete = (polyIdx, pIdx) => {
     if (!currentResult?.ignored_wkt) return;
+    pushToHistory();
     const raw = parseWktToKonva(currentResult.ignored_wkt);
     const poly = [...raw[polyIdx]];
     if (poly.length <= 8) { alert("Cannot delete vertex: minimum 3 vertices required."); return; }
@@ -519,6 +637,16 @@ const Results = ({ globals }) => {
       newPoly[1] = newPoly[lastIdx * 2 + 1];
     }
     raw[polyIdx] = newPoly;
+    syncMaskToWkt(raw);
+  };
+
+  const handleMaskEdgeClick = (polyIdx, edgeIdx, x, y) => {
+    if (!currentResult?.ignored_wkt) return;
+    pushToHistory();
+    const raw = parseWktToKonva(currentResult.ignored_wkt);
+    const poly = [...raw[polyIdx]];
+    poly.splice((edgeIdx + 1) * 2, 0, x, y);
+    raw[polyIdx] = poly;
     syncMaskToWkt(raw);
   };
 
@@ -650,8 +778,14 @@ const Results = ({ globals }) => {
             <button onClick={() => setActiveTool('dimension')} style={{ background: activeTool === 'dimension' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Ruler size={16} /></button>
             <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
             
-            <button onClick={() => setIsConstructionMode(!isConstructionMode)} title="Toggle Construction Mode"
-              style={{ background: isConstructionMode ? '#5c4d1a' : 'transparent', color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+            <button onClick={() => {
+              if (cadRef.current && cadRef.current.hasSelection) {
+                cadRef.current.toggleConstruction();
+              } else {
+                setIsConstructionMode(!isConstructionMode);
+              }
+            }} title={cadRef.current && cadRef.current.hasSelection ? "Toggle Construction for Selected" : "Toggle Construction Mode for New Shapes"}
+              style={{ background: isConstructionMode ? '#5c4d1a' : (cadRef.current && cadRef.current.hasSelection ? '#333' : 'transparent'), color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
                <Hammer size={16} />
             </button>
             <button onClick={() => setIsSubtractionMode(!isSubtractionMode)} title="Toggle Subtraction Mode (Removal)"
@@ -659,23 +793,41 @@ const Results = ({ globals }) => {
                <Minus size={16} />
             </button>
             <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
-            <button onClick={undo} style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Undo2 size={16} /></button>
+            <button 
+              onClick={isEditMode && resultsMode === 'cad' ? handleCadUndo : undo} 
+              style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }} 
+              title="Undo">
+              <Undo2 size={16} />
+            </button>
             <button onClick={handleClearSketch} style={{ background: 'transparent', color: '#ff5252', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Trash2 size={16} /></button>
             <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
-            <button onClick={() => {
-              const { wkt, error } = sketchesToWkt(targetSketches, SCALE_M);
-              if (error) {
-                alert(`⚠️ Finalize Rejected:\n\n${error}`);
+            <button onClick={async () => {
+              const finalWkt = previewFieldWkt;
+              if (!finalWkt) {
+                alert("No sketches found to finalize.");
                 return;
               }
-              if (wkt) {
-                const updatedCases = [...evaluationCases];
-                const k = updatedCases.find(c => c.id === selectedCaseId);
-                if (k) k.custom_dxf = wkt;
-                setEvaluationCases(updatedCases);
-                handleCalculate();
-                setIsEditMode(false);
+
+              // 1. Auto-save sketches session to cadData
+              if (draftCad) {
+                 setCadFieldSafe('Overrides', selectedCaseId, 'sketches', draftCad.sketches);
+                 setCadFieldSafe('Overrides', selectedCaseId, 'dimensions', draftCad.dimensions);
+                 setCadFieldSafe('Overrides', selectedCaseId, 'constraints', draftCad.constraints);
+                 setCadFieldSafe('Overrides', selectedCaseId, 'fixedPoints', draftCad.fixedPoints);
               }
+
+              // 2. Prepare updated case with custom_dxf
+              const updatedCases = [...evaluationCases];
+              const idx = updatedCases.findIndex(c => c.id === selectedCaseId);
+              if (idx !== -1) {
+                updatedCases[idx] = { ...updatedCases[idx], custom_dxf: finalWkt };
+                setEvaluationCases(updatedCases);
+                
+                // 3. Trigger immediate calculation with updated case to avoid race condition
+                await handleCalculate(updatedCases[idx]);
+              }
+
+              setIsEditMode(false);
             }} style={{ background: '#1a4a25', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
               Finalize
             </button>
@@ -726,18 +878,10 @@ const Results = ({ globals }) => {
         {viewMode === 'Composite' && (
           <>
             <button onClick={() => setIsEditMode(!isEditMode)} style={{ background: isEditMode ? '#d32f2f' : '#2a2a2a', color: 'white', border: 'none', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold', marginRight: 6 }}>
-              {isEditMode ? 'DONE' : '✏️ EDIT'}
+              {isEditMode ? (resultsMode === 'cad' ? 'EXIT' : 'DONE') : '✏️ EDIT'}
             </button>
-            {isEditMode && resultsMode === 'cad' && draftCad && (
-              <button onClick={handleSaveDraft} style={{ background: '#00e5ff', color: '#000', border: 'none', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold', marginRight: 6 }}>
-                💾 SAVE SESSION
-              </button>
-            )}
           </>
         )}
-        <button onClick={handleExportJson} style={{ background: '#222', color: '#888', border: '1px solid #333', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5, marginRight: 5 }}>
-          <Download size={14} /> EXPORT JSON
-        </button>
 
         <button onClick={() => setIsGenOpen(true)} style={{ background: '#222', color: '#00e5ff', border: '1px solid #333', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5, marginRight: 5 }}>
           <Settings size={14} /> EVALUATION
@@ -803,7 +947,7 @@ const Results = ({ globals }) => {
           
           <GridCanvas stagePos={stagePos} onStagePosChange={setStagePos} draggable={!isEditMode || activeTool === 'select'}>
             {({ scale, setOverlay }) => (
-              <Layer>
+              <Layer ref={layerRef}>
                 {/* 1. Static Sweeps (Z -10 equivalent) */}
                 {viewMode === 'Sweep Steps' && parsedSweeps.map((poly, i) => (
                   <Line key={`sw-${i}`} points={poly} fill={fillSweeps ? "rgba(255,165,0,0.05)" : "transparent"} stroke="rgba(255,165,0,0.4)" strokeWidth={1/scale} closed />
@@ -819,6 +963,25 @@ const Results = ({ globals }) => {
                   <Line key={`ideal-${i}`} points={poly} stroke="#444" strokeWidth={1/scale} dash={[5/scale, 5/scale]} closed />
                 ))}
 
+                {/* 3a. CAD Preview Field (live boolean result — shown in CAD edit mode, replaces gold field) */}
+                {isEditMode && resultsMode === 'cad' && previewFieldWkt && (() => {
+                  // For the preview, if we are in LiDAR View (local), we need the inverse transform 
+                  // because previewFieldWkt is generated in Robot frame (by combining with base gold field)
+                  const transformFn = viewMode === 'LiDAR View' ? tObj.inv : tObj.fn;
+                  return parseWktWithTransform(previewFieldWkt, transformFn).map((poly, i) => (
+                    <Line
+                      key={`preview-${i}`}
+                      points={poly}
+                      fill="rgba(0, 230, 118, 0.35)"
+                      stroke="#00e676"
+                      strokeWidth={2/scale}
+                      closed
+                      dash={[6/scale, 3/scale]}
+                      listening={false}
+                    />
+                  ));
+                })()}
+
                 {/* 3. Safety Field (GOLD - Parity Color #FFD700) */}
                 {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedField.map((poly, i) => (
                   <Line 
@@ -826,8 +989,9 @@ const Results = ({ globals }) => {
                     points={poly} 
                     fill={FIELD_GOLD_FILL} 
                     stroke={FIELD_GOLD_STROKE} 
-                    strokeWidth={isEditMode ? 2/scale : 0} 
+                    strokeWidth={isEditMode && resultsMode === 'cad' ? 1/scale : (isEditMode ? 2/scale : 0)} 
                     closed 
+                    opacity={isEditMode && resultsMode === 'cad' ? 0.4 : 1}
                   />
                 ))}
 
@@ -906,13 +1070,28 @@ const Results = ({ globals }) => {
 
                 {/* 9a. Safety Field Handles */}
                 {isEditMode && resultsMode === 'polygon' && viewMode === 'Composite' && parsedField.map((poly, polyIdx) => {
-                   if (polyIdx !== 0) return null;
+                   if (polyIdx !== 0) return null; // only edit main polygon for now
                    return (
                      <Group key={`edit-${polyIdx}`}>
+                       {/* Edges Midpoints (Add Points) */}
+                       {Array.from({ length: poly.length / 2 - 1 }).map((_, pIdx) => {
+                          const x1 = poly[pIdx*2], y1 = poly[pIdx*2+1];
+                          const x2 = poly[(pIdx+1)*2], y2 = poly[(pIdx+1)*2+1];
+                          const mx = (x1+x2)/2, my = (y1+y2)/2;
+                          return (
+                            <Circle key={`add-${pIdx}`} x={mx} y={my} radius={4/scale} fill="#00e676" opacity={0.3} 
+                              onClick={() => handleEdgeClick(polyIdx, pIdx, mx, my)}
+                              onMouseEnter={(e) => { e.target.opacity(1); e.target.getStage().container().style.cursor = 'copy'; }}
+                              onMouseLeave={(e) => { e.target.opacity(0.3); e.target.getStage().container().style.cursor = 'default'; }}
+                            />
+                          );
+                       })}
+                       {/* Vertices */}
                        {Array.from({ length: poly.length / 2 }).map((_, pIdx) => {
                          if (pIdx === (poly.length / 2) - 1) return null;
                          return (
                            <Circle key={`h-${pIdx}`} x={poly[pIdx*2]} y={poly[pIdx*2+1]} radius={6/scale} fill="#ff1744" stroke="#fff" strokeWidth={2/scale} draggable
+                             onDragStart={() => pushToHistory()}
                              onDragMove={(e) => handlePointDrag(polyIdx, pIdx, e.target.x(), e.target.y())}
                              onContextMenu={(e) => { e.evt.preventDefault(); handlePointDelete(polyIdx, pIdx); }}
                            />
@@ -925,6 +1104,20 @@ const Results = ({ globals }) => {
                 {/* 9b. Mask (Ignored) Handles */}
                 {isEditingMask && viewMode === 'Composite' && parsedIgnored.map((poly, polyIdx) => (
                   <Group key={`mask-edit-${polyIdx}`}>
+                    {/* Edges Midpoints (Add Points) */}
+                    {Array.from({ length: poly.length / 2 - 1 }).map((_, pIdx) => {
+                        const x1 = poly[pIdx * 2], y1 = poly[pIdx * 2 + 1];
+                        const x2 = poly[(pIdx + 1) * 2], y2 = poly[(pIdx + 1) * 2 + 1];
+                        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+                        return (
+                          <Circle key={`madd-${pIdx}`} x={mx} y={my} radius={4/scale} fill="#ff5252" opacity={0.3}
+                            onClick={() => handleMaskEdgeClick(polyIdx, pIdx, mx, my)}
+                            onMouseEnter={(e) => { e.target.opacity(1); e.target.getStage().container().style.cursor = 'copy'; }}
+                            onMouseLeave={(e) => { e.target.opacity(0.3); e.target.getStage().container().style.cursor = 'default'; }}
+                          />
+                        );
+                    })}
+                    {/* Vertices */}
                     {Array.from({ length: poly.length / 2 }).map((_, pIdx) => {
                       if (pIdx === (poly.length / 2) - 1) return null;
                       return (
@@ -936,6 +1129,7 @@ const Results = ({ globals }) => {
                           stroke="#fff"
                           strokeWidth={2/scale}
                           draggable
+                          onDragStart={() => pushToHistory()}
                           onDragMove={(e) => handleMaskPointDrag(polyIdx, pIdx, e.target.x(), e.target.y())}
                           onContextMenu={(e) => { e.evt.preventDefault(); handleMaskPointDelete(polyIdx, pIdx); }}
                         />
@@ -979,7 +1173,9 @@ const Results = ({ globals }) => {
                          setDraftCad(prev => ({ ...prev, constraints: updated }));
                       }}
                       referenceVertices={refs}
-                      pushToHistory={() => {}} // No global undo for drafts yet
+                       pushToHistory={() => {
+                         setCadHistory(prev => [JSON.stringify(draftCad), ...prev].slice(0, 30));
+                       }}
                       scale={scale} 
                       SCALE_M={SCALE_M} 
                       activeTool={activeTool}

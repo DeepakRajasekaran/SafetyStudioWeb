@@ -1,32 +1,28 @@
-# Dependencies
+# Build and Dependency Directories
 node_modules/
-dist/
 build/
-SafetyStudio/
-
-# Python
+dist/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.venv/
+.Python
 env/
 venv/
+.env
 
-# IDEs
+# Reference Project
+SafetyStudio/
+
+# Local configuration and logs
+*.log
+last_payload.json
 .vscode/
 .idea/
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-*.log
-
-# Project specific
-last_payload.json
-
+# Misc
+.gemini/
+*.zip
+*.csv
