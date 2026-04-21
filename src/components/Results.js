@@ -926,7 +926,7 @@ const Results = ({ globals }) => {
         {caseListOpen && (
           <div style={{ width: 220, background: '#111', borderRight: '1px solid #222', overflowY: 'auto', padding: '10px 0' }}>
             <div style={{ padding: '0 15px 10px', fontSize: '0.65rem', color: '#888', letterSpacing: 1, fontWeight: 'bold' }}>EVALUATION MATRIX</div>
-            {['NoLoad', 'Load1', 'Load2'].map(load => (
+            {[...new Set(evaluationCases.map(c => c.load))].map(load => (
               <div key={load}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 15px', background: '#161616', color: '#aaa', fontSize: '0.7rem' }}>
                   <Database size={10} /> {load}

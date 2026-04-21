@@ -124,7 +124,23 @@ const Hardware = ({ globals }) => {
     setIsExporting(true);
     try {
       const sensor = sensors[sensorIndex];
-      const payload = { sensor, results, evaluationCases };
+      const strippedResults = {};
+      Object.keys(results).forEach(k => {
+        const r = results[k];
+        if (r) {
+          strippedResults[k] = {
+            lidars: (r.lidars || [])
+              .filter(l => l.name === sensor.name)
+              .map(l => ({ 
+                name: l.name, 
+                clip_wkt: l.clip_wkt,
+                origin: l.origin,
+                mount: l.mount
+              }))
+          };
+        }
+      });
+      const payload = { sensor, results: strippedResults, evaluationCases };
       const res = await axios.post('/api/export_leuze', payload, { responseType: 'blob' });
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
