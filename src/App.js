@@ -30,9 +30,9 @@ function App() {
     geometry: { FootPrint: null, Load1: null, Load2: null },
     sensors: [],
     physics: {
-      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: false, field_method: 'union', hull_threshold: 0.5 },
-      Load1:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: false, field_method: 'union', hull_threshold: 0.5 },
-      Load2:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: false, field_method: 'union', hull_threshold: 0.5 }
+      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 },
+      Load1:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 },
+      Load2:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 }
     },
     evaluationCases: [
       { id: 1, load: 'NoLoad', v: 1.0, w: 0.0, type: 'std' },
@@ -114,9 +114,8 @@ function App() {
 
   const pushToHistory = () => {
     setHistory(prev => {
-      const entry = JSON.stringify(cadData);
-      const newHist = [entry, ...prev].slice(0, 50);
-      return newHist;
+      const entry = JSON.stringify({ geometry, sensors, physics, evaluationCases, results, fieldsets, cadData, maxFields, genConfig });
+      return [entry, ...prev].slice(0, 50);
     });
   };
 
@@ -125,7 +124,16 @@ function App() {
       if (prev.length === 0) return prev;
       const [last, ...remaining] = prev;
       try {
-        setCadData(JSON.parse(last));
+        const d = JSON.parse(last);
+        if (d.geometry) setGeometry(d.geometry);
+        if (d.sensors) setSensors(d.sensors);
+        if (d.physics) setPhysics(d.physics);
+        if (d.evaluationCases) setEvaluationCases(d.evaluationCases);
+        if (d.results) setResults(d.results);
+        if (d.fieldsets) setFieldsets(d.fieldsets);
+        if (d.cadData) setCadData(d.cadData);
+        if (d.maxFields !== undefined) setMaxFields(d.maxFields);
+        if (d.genConfig) setGenConfig(d.genConfig);
       } catch (e) { console.error("Undo failed", e); }
       return remaining;
     });
@@ -147,16 +155,25 @@ function App() {
      const saved = localStorage.getItem('safetystudio_session_v1');
      if (saved) {
        try { 
-         const data = JSON.parse(saved);
-         if (data.geometry) setGeometry(data.geometry);
-         if (data.sensors) setSensors(data.sensors);
-         if (data.physics) setPhysics(data.physics);
-         if (data.evaluationCases) setEvaluationCases(data.evaluationCases);
-         if (data.genConfig) setGenConfig(data.genConfig);
-         if (data.results) setResults(data.results);
-         if (data.fieldsets) setFieldsets(data.fieldsets);
-         if (data.maxFields) setMaxFields(data.maxFields);
-         if (data.cadData) setCadData(data.cadData);
+         const d = JSON.parse(saved);
+         if (d.geometry) setGeometry(d.geometry);
+         if (d.sensors) setSensors(d.sensors);
+         if (d.physics) {
+           const p = d.physics;
+           // Migration: Ensure patch_notch is enabled by default even if not in saved state
+           ['NoLoad', 'Load1', 'Load2'].forEach(l => {
+             if (p[l] && p[l].patch_notch === undefined) p[l].patch_notch = true;
+             // Force it to true once to fix potential stale false values from previous turn
+             if (p[l]) p[l].patch_notch = true; 
+           });
+           setPhysics(p);
+         }
+         if (d.evaluationCases) setEvaluationCases(d.evaluationCases);
+         if (d.genConfig) setGenConfig(d.genConfig);
+         if (d.results) setResults(d.results);
+         if (d.fieldsets) setFieldsets(d.fieldsets);
+         if (d.maxFields) setMaxFields(d.maxFields);
+         if (d.cadData) setCadData(d.cadData);
        } catch (e) { console.error("Session Load failed", e); }
      }
   }, []);

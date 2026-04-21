@@ -520,8 +520,8 @@ const Generation = ({ globals }) => {
                     <td style={{ padding: '12px', background: 'rgba(255,255,255,0.03)' }}>
                       <select className="modern-select" value={k.load} onChange={e => handleCaseChange(k.id, 'load', e.target.value)}>
                         <option value="NoLoad">No Load</option>
-                        <option value="Load1">Load 1 (Main)</option>
-                        <option value="Load2">Load 2 (Alt)</option>
+                        <option value="Load1">Load 1</option>
+                        <option value="Load2">Load 2</option>
                         <option value="Misc">Miscellaneous</option>
                       </select>
                     </td>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layer, Line, Circle, Group } from 'react-konva';
-import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, PencilLine, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Anchor, Hammer, Minus } from 'lucide-react';
+import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, PencilLine, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Anchor, Hammer, Minus, Lock } from 'lucide-react';
 import axios from 'axios';
 import { parseWktToKonva } from '../utils/wktParser';
 import GridCanvas, { SCALE_M } from './GridCanvas';
@@ -27,9 +27,17 @@ const Editor = ({ globals, setActiveTab }) => {
   const [showL2, setShowL2]   = useState(true);
   const [isSketchingMode, setIsSketchingMode] = useState(false);
   const [formData, setFormData] = useState({
-    name: 'New Sensor', x: 0, y: 0, mount: 0, fov: 270, r: 10, dia: 150, flipped: false
+    name: 'New Sensor', x: 0, y: 0, mount: 0, fov: 270, r: 10, dia: 150, flipped: false, locked: false
   });
   const [targetLayer, setTargetLayer] = useState('FootPrint');
+  const layerRef = React.useRef(null);
+  
+  // --- Force Canvas Redraw on State Change ---
+  useEffect(() => {
+    if (layerRef.current) {
+       layerRef.current.batchDraw();
+    }
+  }, [geometry, sensors, cadData, isSketchingMode]);
 
   useEffect(() => {
     if (sensors && sensors.length > 0) {
@@ -56,7 +64,7 @@ const Editor = ({ globals, setActiveTab }) => {
   const handleClear       = (key) => setGeometry(prev => ({ ...prev, [key]: null }));
   const handleSaveSensor  = () => { const u = [...sensors]; u[selectedSensorIndex] = { ...formData }; setSensors(u); };
   const handleAddSensor   = () => {
-    const ns = { name: `Lidar${sensors.length + 1}`, model: sensors[0]?.model || 'Sick Nanoscan3Pro', x: 0, y: 0, mount: 0, fov: 270, r: 10, dia: 150, flipped: false };
+    const ns = { name: `Lidar${sensors.length + 1}`, model: sensors[0]?.model || 'Sick Nanoscan3Pro', x: 0, y: 0, mount: 0, fov: 270, r: 10, dia: 150, flipped: false, locked: false };
     setSensors([...sensors, ns]);
     setSelectedSensorIndex(sensors.length);
   };
@@ -246,7 +254,7 @@ const Editor = ({ globals, setActiveTab }) => {
 
         <GridCanvas initialScale={1.0} draggable={activeTool === 'select'}>
           {({ scale: canvasScale, setOverlay }) => (
-            <Layer>
+            <Layer ref={layerRef}>
               {/* FootPrint */}
               {parsedFP.map((pts, i) => (
                 <Line key={`fp-${i}`} points={pts} fill="rgba(153,153,153,0.4)" closed stroke="#888" strokeWidth={1 / canvasScale} />
@@ -293,7 +301,7 @@ const Editor = ({ globals, setActiveTab }) => {
                   name={s.name}
                   dia={s.dia}
                   SCALE_M={SCALE_M}
-                  draggable
+                  draggable={!s.locked}
                   selected={selectedSensorIndex === i}
                   onDragMove={(e) => {
                     const nx = e.target.x() / SCALE_M;
@@ -378,6 +386,7 @@ const Editor = ({ globals, setActiveTab }) => {
               <React.Fragment key={key}>
                 <span style={{ fontSize: '0.85rem', color: '#aaa' }}>{lbl}</span>
                 <input type="text" className="dark-input" value={formData[key]}
+                  disabled={formData.locked && ['x', 'y', 'mount'].includes(key)}
                   onChange={e => setFormData({ ...formData, [key]: e.target.value })} 
                   onBlur={e => {
                     const parsed = parseFloat(e.target.value);
@@ -388,11 +397,18 @@ const Editor = ({ globals, setActiveTab }) => {
             ))}
           </div>
 
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8 }}>
-            <input type="checkbox" checked={formData.flipped}
-              onChange={e => setFormData({ ...formData, flipped: e.target.checked })} />
-            Flipped (Upside Down)
-          </label>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 8 }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={formData.flipped}
+                onChange={e => setFormData({ ...formData, flipped: e.target.checked })} />
+              Flipped (Upside Down)
+            </label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <input type="checkbox" checked={formData.locked || false}
+                onChange={e => setFormData({ ...formData, locked: e.target.checked })} />
+              <Lock size={14} style={{ opacity: formData.locked ? 1 : 0.5 }}/> Pose Lock
+            </label>
+          </div>
 
           <button className="primary-btn" onClick={handleSaveSensor} style={{ marginTop: 10 }}>Apply Changes</button>
         </div>

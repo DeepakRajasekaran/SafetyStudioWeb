@@ -156,7 +156,10 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
   const [dimSelection, setDimSelection] = useState([]);
   const [constraintSelection, setConstraintSelection] = useState([]);
   const [selectedSketchIds, setSelectedSketchIds] = useState([]);
+  const [selectedEdge, setSelectedEdge] = useState(null); // { id, edgeIdx }
   const [selectionBox, setSelectionBox] = useState(null);
+  const stageGroupRef = useRef(null);
+  const pendingMarquee = useRef(null); 
   const drawingState = useRef({ step: 0, isDragging: false, startPos: null, startSnap: null, lastClickTime: 0 });
 
   const sketchesRef      = useRef(sketches);
@@ -168,6 +171,14 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
   useEffect(() => { constraintsRef.current = constraints; }, [constraints]);
   useEffect(() => { dimensionsRef.current  = dimensions;  }, [dimensions]);
   useEffect(() => { fixedPointsRef.current = fixedPoints; }, [fixedPoints]);
+
+  // Force Konva redraw when state changes
+  useEffect(() => {
+    if (stageGroupRef.current) {
+      const layer = stageGroupRef.current.getLayer();
+      if (layer) layer.batchDraw();
+    }
+  }, [sketches, constraints, dimensions, fixedPoints]);
 
   const deleteSelected = useCallback(() => {
     if (!selectedSketchIds.length) return;
@@ -211,8 +222,84 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     setSelectedSketchIds([]);
   }, [selectedSketchIds, pushToHistory, SCALE_M, referenceVertices, setCadBatchSafe, setSketches, setConstraints, setDimensions, setFixedPoints]);
 
+  const toggleConstructionSelection = useCallback(() => {
+    if (!selectedSketchIds.length) return;
+    pushToHistory();
+
+    let nextSketches = [...sketchesRef.current];
+    let nextConstraints = [...constraintsRef.current];
+
+    // If a specific edge of a shape is selected, we must AUTO-EXPLODE
+    if (selectedEdge) {
+      const target = nextSketches.find(s => s.id === selectedEdge.id);
+      if (target && target.type === 'rect') {
+        // Remove rect and add 4 lines
+        nextSketches = nextSketches.filter(s => s.id !== target.id);
+        const [x1, y1] = target.start;
+        const [x2, y2] = target.end;
+        const lineData = [
+          { p: [x1, y1, x2, y1], field: 'top' },
+          { p: [x2, y1, x2, y2], field: 'right' },
+          { p: [x2, y2, x1, y2], field: 'bottom' },
+          { p: [x1, y2, x1, y1], field: 'left' }
+        ];
+
+        const newLines = lineData.map((data, i) => {
+          const id = `ExpLine_${Date.now()}_${i}`;
+          return {
+            id, type: 'line', points: data.p,
+            construction: i === selectedEdge.edgeIdx ? !target.construction : target.construction,
+            op: target.op
+          };
+        });
+
+        nextSketches.push(...newLines);
+
+        // Add constraints to hold the "rectangle" together
+        for (let i = 0; i < 4; i++) {
+          const l1 = newLines[i];
+          const l2 = newLines[(i + 1) % 4];
+          nextConstraints.push({ type: 'coincident', v1: { sketchId: l1.id, part: 'end' }, v2: { sketchId: l2.id, part: 'start' } });
+          nextConstraints.push({ type: i % 2 === 0 ? 'horizontal' : 'vertical', v1: { sketchId: l1.id, part: 'start' }, v2: { sketchId: l1.id, part: 'end' } });
+        }
+
+        // Remap existing constraints and dimensions from target vertices to new line vertices
+        const remapVertex = (v) => {
+           if (v.sketchId !== target.id) return v;
+           // p1: start of L0 / end of L3
+           if (v.part === 'p1' || v.part === 'start') return { sketchId: newLines[0].id, part: 'start' };
+           if (v.part === 'p2') return { sketchId: newLines[1].id, part: 'start' };
+           if (v.part === 'p3' || v.part === 'end') return { sketchId: newLines[2].id, part: 'start' };
+           if (v.part === 'p4') return { sketchId: newLines[3].id, part: 'start' };
+           // Mids
+           if (v.part === 'mid_top') return { sketchId: newLines[0].id, part: 'mid' };
+           if (v.part === 'mid_right') return { sketchId: newLines[1].id, part: 'mid' };
+           if (v.part === 'mid_bottom') return { sketchId: newLines[2].id, part: 'mid' };
+           if (v.part === 'mid_left') return { sketchId: newLines[3].id, part: 'mid' };
+           return v;
+        };
+
+        nextConstraints = nextConstraints.map(c => ({ ...c, v1: remapVertex(c.v1), v2: remapVertex(c.v2) }));
+        const nextDimensions = dimensionsRef.current.map(d => ({ ...d, v1: remapVertex(d.v1), v2: remapVertex(d.v2) }));
+        const nextFixed = fixedPointsRef.current.map(f => remapVertex(f));
+
+        const solveResult = runSolver(nextSketches, nextConstraints, nextDimensions, nextFixed, SCALE_M, referenceVertices);
+        setCadBatchSafe({ sketches: solveResult.sketches, constraints: nextConstraints, dimensions: nextDimensions, fixedPoints: nextFixed });
+        setSelectedSketchIds([]);
+        setSelectedEdge(null);
+        return;
+      }
+    }
+
+    // Default: Toggle selected shapes
+    const updated = nextSketches.map(s => selectedSketchIds.includes(s.id) ? { ...s, construction: !s.construction } : s);
+    setSketches(updated);
+    setSelectedEdge(null);
+  }, [selectedSketchIds, selectedEdge, pushToHistory, setSketches, setCadBatchSafe, SCALE_M, referenceVertices]);
+
   React.useImperativeHandle(ref, () => ({
     deleteSelection: deleteSelected,
+    toggleConstruction: toggleConstructionSelection,
     hasSelection: selectedSketchIds.length > 0
   }));
 
@@ -231,7 +318,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
   // 1. Internal Helpers (Moved to top of component body to prevent ReferenceErrors)
   const getVertices = useCallback(() => {
     const v = [{ x: 0, y: 0, sketchId: 'origin', part: 'origin', type: 'origin' }, ...referenceVertices];
-    sketchesRef.current.forEach(s => {
+    sketches.forEach(s => {
       if (s.type === 'line') {
         v.push({ ...resolveCadPoint(s, 'start'), sketchId: s.id, part: 'start' });
         v.push({ ...resolveCadPoint(s, 'end'), sketchId: s.id, part: 'end' });
@@ -245,7 +332,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
       }
     });
     return v;
-  }, [referenceVertices]);
+  }, [referenceVertices, sketches]);
 
   const snapPos = useCallback((rawX, rawY) => {
     const threshold = 18 / scale;
@@ -259,7 +346,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
 
     if (best.snapped) return best;
 
-    sketchesRef.current.forEach(s => {
+    sketches.forEach(s => {
       if (s.type === 'line') {
         const p = vec.project({x: rawX, y: rawY}, {x: s.points[0], y: s.points[1]}, {x: s.points[2], y: s.points[3]});
         const d = vec.dist(p, {x: rawX, y: rawY});
@@ -276,7 +363,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
       }
     });
     return best;
-  }, [getVertices, scale]);
+  }, [getVertices, scale, sketches]);
 
   const commitDim = useCallback((v1, v2, valStr, tolStr, symbol = '') => {
     const val = parseFloat(valStr);
@@ -461,15 +548,24 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
 
     if (activeTool === 'select') {
       if (snapped.snapped && snapped.sketchId && !snapped.sketchId.startsWith('ref-') && snapped.sketchId !== 'origin') {
+        // Clicked directly on a sketch vertex
+        pendingMarquee.current = null;
         setSelectedSketchIds(prev => {
           if (e.evt.shiftKey) {
             return prev.includes(snapped.sketchId) ? prev.filter(id => id !== snapped.sketchId) : [...prev, snapped.sketchId];
           }
           return [snapped.sketchId];
         });
-      } else if (isDoubleClick) {
-        setSelectedSketchIds(e.evt.shiftKey ? selectedSketchIds : []);
-        setSelectionBox({ startX: pos.x, startY: pos.y, endX: pos.x, endY: pos.y });
+      } else {
+        // Clicked on empty space — arm a potential marquee drag
+        if (isDoubleClick) {
+          setSelectionBox({ startX: pos.x, startY: pos.y, endX: pos.x, endY: pos.y });
+          pendingMarquee.current = null;
+        } else {
+          // Arm a potential marquee drag: it will become visible only once the user drags a few pixels
+          pendingMarquee.current = { x: pos.x, y: pos.y, shiftKey: e.evt.shiftKey };
+        }
+        if (!e.evt.shiftKey) setSelectedSketchIds([]);
         e.cancelBubble = true;
       }
       return;
@@ -609,11 +705,26 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
   }, [activeTool, snapPos, sketches, dimSelection, constraintSelection, SCALE_M, setOverlay, fixedPoints, dimensions, setSketches, pushToHistory, isConstructionMode, isSubtractionMode, newShape, finalizeShape]);
 
   const handleMouseMove = useCallback((e) => {
-    if (activeTool === 'select' && selectionBox) {
+    if (activeTool === 'select') {
       const stage = e.target.getStage();
       if (!stage) return;
       const pos = stage.getRelativePointerPosition();
-      setSelectionBox(prev => ({ ...prev, endX: pos.x, endY: pos.y }));
+
+      // Promote pending marquee to active once mouse drags beyond threshold
+      if (pendingMarquee.current && e.evt.buttons === 1) {
+        const dx = Math.abs(pos.x - pendingMarquee.current.x);
+        const dy = Math.abs(pos.y - pendingMarquee.current.y);
+        if (dx > 4 || dy > 4) {
+          setSelectionBox({ startX: pendingMarquee.current.x, startY: pendingMarquee.current.y, endX: pos.x, endY: pos.y });
+          pendingMarquee.current = null;
+        }
+        return;
+      }
+
+      if (selectionBox) {
+        setSelectionBox(prev => ({ ...prev, endX: pos.x, endY: pos.y }));
+        return;
+      }
       return;
     }
 
@@ -634,10 +745,13 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     if (newShape.type === 'line') setNewShape({ ...newShape, points: [newShape.points[0], newShape.points[1], snapped.x, snapped.y] });
     else if (newShape.type === 'circle') setNewShape({ ...newShape, radius: vec.dist({x: newShape.center[0], y: newShape.center[1]}, snapped) });
     else if (newShape.type === 'rect') setNewShape({ ...newShape, end: [snapped.x, snapped.y] });
-  }, [newShape, snapPos]);
+  }, [newShape, snapPos, selectionBox, activeTool]);
 
   const handleMouseUp = useCallback((e) => {
-    // Finish select drag
+    // Discard the pending marquee if user didn't drag far enough (it was just a click)
+    pendingMarquee.current = null;
+
+    // Finish active marquee selection drag
     if (activeTool === 'select' && selectionBox) {
       const { startX, startY, endX, endY } = selectionBox;
       if (Math.abs(startX - endX) > 2 && Math.abs(startY - endY) > 2) {
@@ -681,7 +795,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
   }, [activeTool, finalizeShape]);
 
   return (
-    <Group onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onDblClick={handleDblClick}>
+    <Group ref={stageGroupRef} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onDblClick={handleDblClick}>
       <Circle radius={10000} fill="rgba(0,0,0,0)" />
       {sketches.map(s => {
         const isSelected = selectedSketchIds.includes(s.id);
@@ -694,7 +808,19 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
         <Group key={s.id}>
           {s.type === 'line' && <Line points={s.points} stroke={color} strokeWidth={strokeWidth} dash={dash} shadowBlur={isSelected ? 5 : 0} shadowColor="#00e5ff" />}
           {s.type === 'circle' && <Circle x={s.center[0]} y={s.center[1]} radius={s.radius} stroke={color} strokeWidth={strokeWidth} dash={dash} shadowBlur={isSelected ? 5 : 0} shadowColor="#00e5ff" />}
-          {s.type === 'rect' && <Line points={[s.start[0], s.start[1], s.end[0], s.start[1], s.end[0], s.end[1], s.start[0], s.end[1], s.start[0], s.start[1]]} stroke={color} strokeWidth={strokeWidth} closed dash={dash} shadowBlur={isSelected ? 5 : 0} shadowColor="#00e5ff" />}
+          {s.type === 'rect' && (() => {
+            const [x1, y1] = s.start;
+            const [x2, y2] = s.end;
+            const edges = [
+              [x1, y1, x2, y1], [x2, y1, x2, y2], [x2, y2, x1, y2], [x1, y2, x1, y1]
+            ];
+            return edges.map((pts, i) => {
+              const edgeSelected = isSelected && selectedEdge?.id === s.id && selectedEdge?.edgeIdx === i;
+              const edgeColor = edgeSelected ? '#00e5ff' : color;
+              const edgeWidth = (edgeSelected ? 4 : (isSelected ? 3 : 2)) / scale;
+              return <Line key={`${s.id}-e${i}`} points={pts} stroke={edgeColor} strokeWidth={edgeWidth} dash={dash} />;
+            });
+          })()}
         </Group>
       )})}
       {newShape && (

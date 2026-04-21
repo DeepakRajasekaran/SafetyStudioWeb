@@ -14,7 +14,7 @@ from caseExport import generate_casesxml
 app = Flask(__name__)
 CORS(app)
 
-XML_TEMPLATE_PATH = "SafetyStudio/assets/exampleLidar.xml"
+XML_TEMPLATE_PATH = "assets/exampleLidar.xml"
 
 @app.route('/api/status', methods=['GET'])
 def status():
@@ -70,11 +70,30 @@ def calculate_case():
         
         footprint = wkt.loads(footprint_wkt)
         
-        print(f"DEBUG: Processing {load_key} case with P: {P}")
-        final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union = SafetyMath.calc_case(
-            footprint, load_poly, sensors, v, w_input, P
-        )
+        custom_wkt = data.get('custom_field_wkt')
+        override_poly = None
+        if custom_wkt:
+            try:
+                override_poly = wkt.loads(custom_wkt)
+            except Exception as e:
+                print(f"ERROR: Failed to load custom_field_wkt: {e}")
+
+        print(f"DEBUG: Processing {load_key} case with P: {P} | Custom: {bool(override_poly)}")
         
+        try:
+            final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union = SafetyMath.calc_case(
+                footprint, load_poly, sensors, v, w_input, P, override_poly=override_poly
+            )
+        except Exception as solver_err:
+            print(f"CRITICAL: Solver failed: {solver_err}")
+            import traceback
+            traceback.print_exc()
+            # Safety Fallback: recalculate without override if merge failed
+            final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union = SafetyMath.calc_case(
+                footprint, load_poly, sensors, v, w_input, P
+            )
+            print("INFO: Reverted to physics fallback field.")
+
         lidar_data = []
         if lid_out:
             for l in lid_out:
@@ -119,7 +138,7 @@ def export_sick():
         if not os.path.exists(XML_TEMPLATE_PATH):
             return jsonify({"error": "Template XML not found inside container."}), 500
             
-        XML_CASES_TEMPLATE_PATH = "exampleCases.casesxml"
+        XML_CASES_TEMPLATE_PATH = "assets/exampleCases.casesxml"
         if not os.path.exists(XML_CASES_TEMPLATE_PATH):
             return jsonify({"error": "Cases Template XML not found."}), 500
         

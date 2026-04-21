@@ -111,17 +111,45 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
     return null;
   };
 
+  const getLinesFromShape = (s) => {
+    if (s.type === 'rect') {
+      const [x1, y1] = s.start;
+      const [x2, y2] = s.end;
+      return [
+        { points: [x1, y1, x2, y1], construction: s.construction, op: s.op },
+        { points: [x2, y1, x2, y2], construction: s.construction, op: s.op },
+        { points: [x2, y2, x1, y2], construction: s.construction, op: s.op },
+        { points: [x1, y2, x1, y1], construction: s.construction, op: s.op }
+      ];
+    }
+    return [];
+  };
+
   const additiveSketches = activeSketches.filter(s => s.op !== 'subtract');
   const subtractiveSketches = activeSketches.filter(s => s.op === 'subtract');
 
+  const allAdditiveLines = [
+    ...additiveSketches.filter(s => s.type === 'line'),
+    ...additiveSketches.flatMap(getLinesFromShape)
+  ];
+
+  const allSubtractiveLines = [
+    ...subtractiveSketches.filter(s => s.type === 'line'),
+    ...subtractiveSketches.flatMap(getLinesFromShape)
+  ];
+
   const additive = [
-    ...additiveSketches.filter(s => s.type === 'line' ? false : true).map(getPolyCoords).filter(Boolean),
-    ...linesToPolys(additiveSketches.filter(s => s.type === 'line'))
+    // 1. Standard shapes (robust handling)
+    ...additiveSketches.filter(s => s.type === 'circle' || s.type === 'rect').map(getPolyCoords).filter(Boolean),
+    // 2. Custom line loops
+    ...linesToPolys(allAdditiveLines)
   ];
 
   const subtractive = [
-    ...subtractiveSketches.filter(s => s.type === 'line' ? false : true).map(getPolyCoords).filter(Boolean),
-    ...linesToPolys(subtractiveSketches.filter(s => s.type === 'line'))
+    // 1. Standard shapes (robust handling)
+    ...subtractiveSketches.filter(s => s.type === 'circle' || s.type === 'rect').map(getPolyCoords).filter(Boolean),
+    // 2. Custom line loops
+    ...linesToPolys(allSubtractiveLines)
   ];
 
   if (additive.length === 0) {

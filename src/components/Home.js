@@ -32,7 +32,7 @@ const Home = ({ globals, setActiveTab }) => {
 
   const handleDownload = () => {
     const exportData = {
-      geometry, sensors, physics, evaluationCases, fieldsets,
+      geometry, sensors, physics, evaluationCases, fieldsets, cadData, maxFields, genConfig,
       results: Object.fromEntries(
         Object.entries(results).map(([id, data]) => [
           id, { final_field_wkt: data?.final_field_wkt || data, load: data?.load, dist_d: data?.dist_d }
@@ -60,6 +60,9 @@ const Home = ({ globals, setActiveTab }) => {
         if (d.evaluationCases) setEvaluationCases(d.evaluationCases);
         if (d.fieldsets) setFieldsets(d.fieldsets);
         if (d.results) setResults(d.results);
+        if (d.cadData) setCadData(d.cadData);
+        if (d.maxFields !== undefined) setMaxFields(d.maxFields);
+        if (d.genConfig) setGenConfig(d.genConfig);
         alert('Configuration imported successfully!');
       } catch (err) {
         alert('Failed to parse JSON: ' + err.message);
