@@ -1,5 +1,21 @@
 import React, { useState, useRef } from 'react';
-import { Plus, Trash2, FileUp, Settings2, Activity, Database, Check, History, Layers, Sliders, Info, Zap, Calculator, Trash, Minus } from 'lucide-react';
+import { 
+  Plus, 
+  Trash, 
+  FileArrowUp, 
+  GearSix, 
+  Pulse, 
+  Database, 
+  Check, 
+  ClockCounterClockwise, 
+  Stack, 
+  Sliders, 
+  Info, 
+  Lightning, 
+  StackPlus, 
+  Atom, 
+  Minus 
+} from '@phosphor-icons/react';
 import axios from 'axios';
 
 const ModernInput = ({ value, onChange, placeholder, disabled, style = {} }) => (
@@ -28,7 +44,7 @@ const ModernInput = ({ value, onChange, placeholder, disabled, style = {} }) => 
 const SectionHeader = ({ icon: Icon, title, subtitle }) => (
   <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
     <div style={{ padding: 10, background: 'rgba(0,229,255,0.1)', borderRadius: 12, display: 'flex' }}>
-      <Icon size={20} color="#00e5ff" />
+      <Icon size={20} weight="bold" color="#00e5ff" />
     </div>
     <div>
       <h3 style={{ margin: 0, fontSize: '0.95rem', fontWeight: 700, color: '#fff', letterSpacing: '0.02em' }}>{title}</h3>
@@ -231,7 +247,7 @@ const Generation = ({ globals }) => {
           
           {/* Physics Config Card */}
           <div className="glass-card" style={{ padding: 24, borderRadius: 20, background: 'rgba(25,25,25,0.4)', border: '1px solid rgba(255,255,255,0.05)', backdropFilter: 'blur(10px)' }}>
-            <SectionHeader icon={Activity} title="PHYSICS ENGINE" subtitle="Calculated Stopping Distance parameters" />
+            <SectionHeader icon={Atom} title="PHYSICS ENGINE" subtitle="Calculated Stopping Distance parameters" />
             
             <div style={{ background: 'rgba(0,229,255,0.05)', padding: '12px', borderRadius: 12, marginBottom: 20, fontFamily: 'monospace', color: '#00e5ff', fontSize: '0.75rem', textAlign: 'center', border: '1px dashed rgba(0,229,255,0.2)' }}>
               D = v·Tᵣ + v²/2a + Dₛ
@@ -390,15 +406,15 @@ const Generation = ({ globals }) => {
               <tbody>
                 {/* Numeric params */}
                 {[
-                  { lbl: 'Intensity Levels', k: 'levels', icon: Database },
-                  { lbl: 'Max Fwd v (m/s)', k: 'v', icon: Zap },
-                  { lbl: 'Max Rev v (m/s)', k: 'revV', icon: History },
-                  { lbl: 'Min v (m/s)', k: 'minV', icon: Minus },
-                  { lbl: 'Max Ang w (rad/s)', k: 'w', icon: Settings2 },
+                  { lbl: 'Intensity Levels', k: 'levels' },
+                  { lbl: 'Max Fwd v (m/s)', k: 'v' },
+                  { lbl: 'Max Rev v (m/s)', k: 'revV' },
+                  { lbl: 'Min v (m/s)', k: 'minV' },
+                  { lbl: 'Max Ang w (rad/s)', k: 'w' },
                 ].map(row => (
                   <tr key={row.k}>
                     <td style={{ color: '#ccc', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 6, height: 36 }}>
-                      <row.icon size={12} color="#666" /> {row.lbl}
+                      {row.lbl}
                     </td>
                     {['NoLoad', 'Load1', 'Load2'].map(load => (
                       <td key={load} style={{ padding: '0 4px' }}>
@@ -415,7 +431,7 @@ const Generation = ({ globals }) => {
                 {/* Derived Params */}
                 <tr>
                   <td style={{ color: '#00e5ff', fontSize: '0.65rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, height: 32 }}>
-                    <Activity size={12} /> EFFECTIVE STEP
+                    EFFECTIVE STEP
                   </td>
                   {['NoLoad', 'Load1', 'Load2'].map(load => {
                     const c = genConfig[load];
@@ -431,11 +447,8 @@ const Generation = ({ globals }) => {
                 {/* Divider */}
                 <tr><td colSpan="4"><div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', margin: '6px 0' }} /></td></tr>
                 <tr>
-                  <td colSpan="4" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 4 }}>
+                  <td colSpan="4" style={{ paddingBottom: 4 }}>
                     <span style={{ fontSize: '0.65rem', color: '#888', textTransform: 'uppercase', letterSpacing: '0.1em' }}>Motion Types</span>
-                    <button onClick={handleScaleToHardware} style={{ background: 'rgba(0,229,255,0.1)', color: '#00e5ff', border: '1px solid rgba(0,229,255,0.2)', padding: '2px 8px', borderRadius: 4, fontSize: '0.6rem', fontWeight: 'bold', cursor: 'pointer' }}>
-                      SCALE TO HARDWARE
-                    </button>
                   </td>
                 </tr>
                 {/* Motion checkboxes */}
@@ -469,13 +482,16 @@ const Generation = ({ globals }) => {
 
             <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                <button onClick={handlePopulateTable} className="action-btn-primary" style={{ gridColumn: 'span 2' }}>
-                 <Calculator size={16} /> GENERATE ALL CASES
+                 <StackPlus size={16} weight="bold" /> GENERATE ALL CASES
+               </button>
+               <button onClick={handleScaleToHardware} className="action-btn-secondary" style={{ gridColumn: 'span 2' }}>
+                 <GearSix size={16} weight="bold" /> SCALE TO HARDWARE
                </button>
                <button onClick={handleAddMiscCase} className="action-btn-secondary">
                  <Plus size={16} /> ADD MISC
                </button>
                <button onClick={() => setEvaluationCases([])} className="action-btn-danger">
-                 <Trash2 size={16} /> CLEAR
+                 <Trash size={16} weight="bold" /> CLEAR
                </button>
             </div>
           </div>
@@ -486,7 +502,7 @@ const Generation = ({ globals }) => {
           <div style={{ padding: '24px 32px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <div style={{ padding: 10, background: 'rgba(168,85,247,0.1)', borderRadius: 12 }}>
-                <Layers size={22} color="#a855f7" />
+                <Stack size={22} weight="bold" color="#a855f7" />
               </div>
               <div>
                 <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#fff' }}>EVALUATION MATRIX</h2>
@@ -533,12 +549,12 @@ const Generation = ({ globals }) => {
                     </td>
                     <td style={{ padding: '12px', textAlign: 'center', background: 'rgba(255,255,255,0.03)' }}>
                        <button onClick={() => triggerFileUpload(k.id)} className="dxf-btn" style={{ background: k.custom_dxf ? 'rgba(34,197,94,0.1)' : 'rgba(255,255,255,0.05)', color: k.custom_dxf ? '#4ade80' : '#888', border: '1px solid rgba(255,255,255,0.05)', padding: '6px 12px', borderRadius: 8, fontSize: '0.7rem', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                         <FileUp size={12} /> {k.custom_dxf_name || 'Upload'}
+                         <FileArrowUp size={12} weight="bold" /> {k.custom_dxf_name || 'Upload'}
                        </button>
                     </td>
                     <td style={{ padding: '12px', textAlign: 'right', background: 'rgba(255,255,255,0.03)', borderRadius: '0 12px 12px 0' }}>
                       <button onClick={() => handleDeleteCase(k.id)} className="delete-icon-btn">
-                        <Trash size={16} />
+                        <Trash size={16} weight="bold" />
                       </button>
                     </td>
                   </tr>
@@ -547,7 +563,7 @@ const Generation = ({ globals }) => {
             </table>
             {evaluationCases.length === 0 && (
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 80, color: '#444' }}>
-                <History size={48} style={{ marginBottom: 16, opacity: 0.3 }} />
+                <ClockCounterClockwise size={48} weight="bold" style={{ marginBottom: 16, opacity: 0.3 }} />
                 <div style={{ fontWeight: 600, fontSize: '0.9rem' }}>No evaluation cases yet</div>
                 <div style={{ fontSize: '0.75rem', marginTop: 4 }}>Generate a matrix or add cases manually</div>
               </div>

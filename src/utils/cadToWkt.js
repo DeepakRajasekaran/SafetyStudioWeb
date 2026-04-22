@@ -70,7 +70,7 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
            parseFloat((p[0] / SCALE_M).toFixed(6)),
            parseFloat((-(p[1] / SCALE_M)).toFixed(6))
         ]);
-        polys.push([pts]);
+        polys.push([[pts]]);
       }
     }
 
@@ -96,7 +96,7 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
           pts.push([parseFloat(x.toFixed(6)), parseFloat(y.toFixed(6))]);
       }
       pts.push(pts[0]);
-      return [pts];
+      return [[pts]]; // MultiPolygon
     }
     if (sketch.type === 'rect') {
       const [x1, y1] = sketch.start;
@@ -106,7 +106,7 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
         parseFloat((px / SCALE_M).toFixed(6)), 
         parseFloat((-(py / SCALE_M)).toFixed(6))
       ]);
-      return [pts];
+      return [[pts]]; // MultiPolygon
     }
     return null;
   };
@@ -152,7 +152,7 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
     ...linesToPolys(allSubtractiveLines)
   ];
 
-  if (additive.length === 0) {
+  if (additive.length === 0 && subtractive.length === 0) {
     if (sketches.some(s => s.construction)) {
        return { wkt: null, error: "No closed loops found. (Note: Construction lines are ignored for field boundaries; try converting them to standard lines if they are part of the perimeter.)" };
     }
@@ -160,17 +160,25 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
   }
 
   try {
-    // 1. Union all additive shapes
-    let result = union(...additive);
+    // 1. Union all additive shapes, or initialize empty if none
+    let result = additive.length > 0 ? union(...additive) : [];
 
     // 2. Iteratively subtract removal shapes
     subtractive.forEach(subPoly => {
       if (result.length > 0) {
         result = difference(result, subPoly);
+      } else {
+        // If no additive shapes, the union of subtractive shapes themselves becomes the result
+        // This is useful for callers like Results.js that perform their own secondary booleans
+        result = result.length === 0 ? subPoly : union(result, subPoly);
       }
     });
 
-    if (!result || result.length === 0) return { wkt: null, error: "The resulting polygon is empty (everything might have been subtracted)." };
+    if (!result || result.length === 0) {
+      if (additive.length > 0) return { wkt: null, error: "The resulting polygon is empty (everything might have been subtracted)." };
+      // If we only had subtractive shapes and result is still empty, it shouldn't happen due to loop above, but safety check:
+      return { wkt: null, error: "No valid geometry resolved." };
+    }
 
     // 3. Simplification / Formatting
     const formatPolygon = (poly) => {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Settings, Play, X, Download, Upload } from 'lucide-react';
+import { Gear, Play, X, DownloadSimple, UploadSimple } from '@phosphor-icons/react';
 
 const Home = ({ globals, setActiveTab }) => {
   const { 
@@ -100,21 +100,21 @@ const Home = ({ globals, setActiveTab }) => {
           </div>
 
           <button className="primary-btn mt-4" onClick={handleStart}>
-            <Play size={18} /> Start Configuration
+            <Play size={18} weight="bold" /> Start Configuration
           </button>
 
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="secondary-btn mt-4" style={{ flex: 1 }} onClick={handleDownload}>
-              <Download size={18} /> Export
+              <DownloadSimple size={18} weight="bold" /> Export
             </button>
             <label className="secondary-btn mt-4" style={{ flex: 1, cursor: 'pointer' }}>
-               <Upload size={18} /> Import
+               <UploadSimple size={18} weight="bold" /> Import
                <input type="file" accept=".json" style={{ display: 'none' }} onChange={handleImport} />
             </label>
           </div>
 
           <button className="btn-danger mt-4" onClick={clearSession}>
-            <X size={18} /> Clear Session
+            <X size={18} weight="bold" /> Clear Session
           </button>
         </div>
       </div>

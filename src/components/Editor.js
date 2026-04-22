@@ -1,6 +1,29 @@
 import React, { useState, useEffect } from 'react';
 import { Layer, Line, Circle, Group } from 'react-konva';
-import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, PencilLine, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Anchor, Hammer, Minus, Lock } from 'lucide-react';
+import { 
+  SelectionPlus, 
+  LineSegment, 
+  Circle as CircleIcon, 
+  Rectangle, 
+  ArrowUUpLeft, 
+  Trash, 
+  Backspace,
+  GpsFix, 
+  Ruler, 
+  DotsSix, 
+  Link, 
+  Equals, 
+  ArrowUp, 
+  ArrowRight, 
+  Rows, 
+  VectorTwo, 
+  Anchor, 
+  Hammer, 
+  Subtract, 
+  Lock,
+  PencilSimple,
+  X
+} from '@phosphor-icons/react';
 import axios from 'axios';
 import { parseWktToKonva } from '../utils/wktParser';
 import GridCanvas, { SCALE_M } from './GridCanvas';
@@ -171,57 +194,57 @@ const Editor = ({ globals, setActiveTab }) => {
         <div style={{ display: 'flex', gap: 5, background: '#222', padding: '2px 8px', borderRadius: 6, alignItems: 'center' }}>
           <button onClick={() => setActiveTool('select')} title="Select"
             style={{ background: activeTool === 'select' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <MousePointer2 size={16} />
+            <SelectionPlus size={16} weight="bold" />
           </button>
 
           <div style={{ width: 1, height: 16, background: '#333', margin: '0 4px' }} />
           
           <button onClick={() => setIsConstructionMode(!isConstructionMode)} title="Toggle Construction Mode"
             style={{ background: isConstructionMode ? '#5c4d1a' : 'transparent', color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-             <Hammer size={16} />
+             <Hammer size={16} weight="bold" />
           </button>
           <button onClick={() => setIsSubtractionMode(!isSubtractionMode)} title="Toggle Subtraction Mode (Removal)"
             style={{ background: isSubtractionMode ? '#5c1a1a' : 'transparent', color: isSubtractionMode ? '#ff5252' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-             <Minus size={16} />
-          </button>
-          <button onClick={() => setActiveTool('circle')} title="Circle"
-            style={{ background: activeTool === 'circle' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <CircleIcon size={16} />
+             <Subtract size={16} weight="fill" />
           </button>
           <button onClick={() => setActiveTool('line')} title="Line"
             style={{ background: activeTool === 'line' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <PenLine size={16} />
+            <LineSegment size={16} weight="bold" />
           </button>
           <button onClick={() => setActiveTool('rect')} title="Rectangle"
             style={{ background: activeTool === 'rect' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <Square size={16} />
+            <Rectangle size={16} weight="bold" />
+          </button>
+          <button onClick={() => setActiveTool('circle')} title="Circle"
+            style={{ background: activeTool === 'circle' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+            <CircleIcon size={16} weight="bold" />
           </button>
           <button onClick={() => setActiveTool('dimension')} title="Dimension"
             style={{ background: activeTool === 'dimension' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <Ruler size={16} />
+            <Ruler size={16} weight="bold" />
           </button>
           
           <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
 
           <button onClick={undo} title="Undo (Ctrl+Z)"
             style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <Undo2 size={16} />
+            <ArrowUUpLeft size={16} weight="bold" />
           </button>
           <button onClick={handleClearSketch} title="Clear All Sketch"
             style={{ background: 'transparent', color: '#ff5252', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <Trash2 size={16} />
+            <Trash size={16} weight="bold" />
           </button>
           
           <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
 
           <div style={{ display: 'flex', gap: 2 }}>
-             {[
-               ['coincide', Link2], ['equal', Equal], ['vertical', ArrowUp], 
-               ['horizontal', ArrowRight], ['parallel', Rows], ['perpendicular', CornerDownLeft], ['anchor', Anchor]
-             ].map(([t, Icon]) => (
+              {[
+                ['coincide', GpsFix], ['equal', Equals], ['vertical', ArrowUp], 
+                ['horizontal', ArrowRight], ['parallel', Rows], ['perpendicular', VectorTwo], ['anchor', Anchor]
+              ].map(([t, Icon]) => (
                 <button key={t} onClick={() => setActiveTool(t)} title={t.charAt(0).toUpperCase() + t.slice(1)}
-                  style={{ background: activeTool === t ? '#1a3a5c' : 'transparent', color: '#00e5ff', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-                  <Icon size={16} />
+                  style={{ background: activeTool === t ? '#1a4a25' : 'transparent', color: '#00e5ff', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+                  <Icon size={16} weight={t === 'coincide' ? "fill" : "bold"} />
                 </button>
              ))}
           </div>
@@ -346,12 +369,12 @@ const Editor = ({ globals, setActiveTab }) => {
           <div className="panel-title" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             LiDAR Manager
             <div style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.8 }}>
-              <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#00e5ff' }}>CAPACITY:</span>
+              <span style={{ fontSize: '0.65rem', fontWeight: 'bold', color: '#fff' }}>CAPACITY:</span>
               <input 
                 type="number" 
                 value={maxFields} 
                 onChange={(e) => setMaxFields(parseInt(e.target.value) || 0)}
-                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid #444', color: '#fff', width: 50, fontSize: '0.75rem', textAlign: 'center', borderRadius: 4, padding: '2px 0' }}
+                style={{ background: 'rgba(0,0,0,0.3)', border: '1px solid #444', color: '#fff', width: 65, fontSize: '0.75rem', textAlign: 'center', borderRadius: 4, padding: '2px 0' }}
               />
             </div>
           </div>
@@ -373,7 +396,10 @@ const Editor = ({ globals, setActiveTab }) => {
           </div>
           <div className="row-group">
             <button className="btn-blue" onClick={handleAddSensor}>+ Add</button>
-            <button className="btn-red"  onClick={handleDeleteSensor}>– Del</button>
+            <button className="btn-red" onClick={handleDeleteSensor} 
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Backspace size={14} weight="bold" /> Del
+            </button>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr auto 1fr', gap: '8px', alignItems: 'center', marginTop: 8 }}>
@@ -417,8 +443,21 @@ const Editor = ({ globals, setActiveTab }) => {
         <div className="panel-section">
           <div className="panel-title">Geometry Loader</div>
           {['FootPrint', 'Load1', 'Load2'].map((key) => (
-            <div className="file-row" key={key} style={{ background: targetLayer === key ? 'rgba(26,58,92,0.3)' : 'transparent', borderRadius: 4, padding: 2 }}>
-              <label className="btn-blue" style={{ textAlign: 'center', cursor: 'pointer', flex: 2, fontSize: '0.8rem', padding: '5px' }}>
+            <div className="file-row" key={key} style={{ background: targetLayer === key ? 'rgba(26,58,92,0.3)' : 'transparent', borderRadius: 4, padding: '4px 2px', gap: 4, display: 'flex' }}>
+              <label className="btn-blue" style={{ 
+                textAlign: 'center', 
+                cursor: 'pointer', 
+                flex: 6, 
+                fontSize: '0.8rem', 
+                padding: '6px 4px', 
+                height: 30, 
+                display: 'flex', 
+                alignItems: 'center', 
+                justifyContent: 'center',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}>
                 {geometry[key] ? `✓ ${key}` : key}
                 <input type="file" style={{ display: 'none' }} accept=".dxf" onChange={e => handleUpload(e, key)} />
               </label>
@@ -426,13 +465,15 @@ const Editor = ({ globals, setActiveTab }) => {
                  setTargetLayer(key);
                  setActiveTool('line');
                  setIsSketchingMode(true);
-              }} style={{ padding: '0 8px' }}>
-                <PencilLine size={14} />
+              }} style={{ padding: 0, flex: 3, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <PencilSimple size={14} weight="fill" />
               </button>
               <button className="btn-red" title="Clear both DXF and Sketch" onClick={() => {
                  handleClear(key);
                  setCadFieldSafe(key, null, 'sketches', []);
-              }} style={{ padding: '0 8px' }}>✕</button>
+              }} style={{ padding: 0, flex: 1, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <X size={14} weight="bold" />
+              </button>
             </div>
           ))}
         </div>
