@@ -1,7 +1,33 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { parse } from 'wellknown';
 import { Layer, Line, Circle, Group } from 'react-konva';
-import { MousePointer2, PenLine, Circle as CircleIcon, Square, Undo2, Trash2, Ruler, GripHorizontal, Link2, Equal, ArrowUp, ArrowRight, Rows, CornerDownLeft, Settings, Info, List, Database, Hammer, Minus, X, Download } from 'lucide-react';
+import { 
+  SelectionPlus, 
+  LineSegment, 
+  Circle as CircleIcon, 
+  Rectangle, 
+  ArrowUUpLeft, 
+  Trash, 
+  Ruler, 
+  DotsSix, 
+  Link, 
+  Equals, 
+  ArrowUp, 
+  ArrowRight, 
+  Rows, 
+  VectorTwo, 
+  Sliders, 
+  Info, 
+  List, 
+  Database, 
+  Hammer, 
+  Subtract, 
+  X, 
+  PencilSimple,
+  DownloadSimple, 
+  Play, 
+  Lightning 
+} from '@phosphor-icons/react';
 import axios from 'axios';
 import Generation from './Generation';
 import { parseWktToKonva } from '../utils/wktParser';
@@ -368,6 +394,7 @@ const Results = ({ globals }) => {
     const k = targetCaseArg || evaluationCases.find(c => c.id === selectedCaseId);
     if (!k || !geometry.FootPrint) return;
     setIsCalculating(true);
+    pushToHistory();
     try {
       const res = await axios.post('/api/calculate', buildPayload(k));
       if (res.data.success) setResults(prev => ({ ...prev, [k.id]: res.data }));
@@ -376,6 +403,7 @@ const Results = ({ globals }) => {
 
   const handleCalculateAll = async () => {
     setIsCalculating(true);
+    pushToHistory();
     for (const k of evaluationCases) {
       try {
         const res = await axios.post('/api/calculate', buildPayload(k));
@@ -657,19 +685,18 @@ const Results = ({ globals }) => {
       <div style={{ display: 'flex', alignItems: 'center', gap: 15, padding: '8px 20px', background: '#1a1a1a', borderBottom: '1px solid #2a2a2a', flexShrink: 0, boxShadow: '0 4px 10px rgba(0,0,0,0.3)', zIndex: 10 }}>
         
         {/* View Mode Segmented Control */}
-        <div style={{ display: 'flex', background: '#0e0e0e', padding: 3, borderRadius: 20, gap: 2, border: '1px solid #333' }}>
+        <div className="segmented-control">
            {[
              { id: 'Composite', label: 'Composite' },
              { id: 'LiDAR View', label: 'LiDAR' },
              { id: 'Sweep Steps', label: 'Sweeps' }
            ].map(v => (
-             <button key={v.id} onClick={() => setViewMode(v.id)} 
-               style={{ 
-                 background: viewMode === v.id ? '#1e3a5f' : 'transparent', 
-                 color: viewMode === v.id ? '#00e5ff' : '#666', 
-                 border: 'none', padding: '5px 15px', fontSize: '0.65rem', fontWeight: '700', cursor: 'pointer', borderRadius: 18, transition: 'all 0.2s', letterSpacing: '0.05em' 
-               }}>
-               {v.label.toUpperCase()}
+             <button 
+               key={v.id} 
+               onClick={() => setViewMode(v.id)} 
+               className={`segmented-btn ${viewMode === v.id ? 'active' : ''}`}
+             >
+               {v.label}
              </button>
            ))}
         </div>
@@ -678,15 +705,15 @@ const Results = ({ globals }) => {
           <>
             <div style={{ width: 1, height: 16, background: '#333' }} />
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <div style={{ display: 'flex', background: '#0e0e0e', padding: 3, borderRadius: 20, gap: 2, border: '1px solid #333' }}>
+            <div className="segmented-control">
                 {lidarList.map((l, idx) => (
-                  <button key={l.name} onClick={() => setSelectedLidar(l.name)}
-                    style={{
-                      background: activeLidar?.name === l.name ? '#1a4a25' : 'transparent',
-                      color: activeLidar?.name === l.name ? '#00e676' : '#666',
-                      border: 'none', padding: '5px 12px', fontSize: '0.6rem', fontWeight: '700', cursor: 'pointer', borderRadius: 18, transition: 'all 0.2s'
-                    }}>
-                    {l.name.toUpperCase()}
+                  <button 
+                    key={l.name} 
+                    onClick={() => setSelectedLidar(l.name)}
+                    className={`segmented-btn ${activeLidar?.name === l.name ? 'active' : ''}`}
+                    style={{ background: activeLidar?.name === l.name ? '#1a4a25' : 'transparent' }}
+                  >
+                    {l.name}
                   </button>
                 ))}
               </div>
@@ -706,64 +733,34 @@ const Results = ({ globals }) => {
         <div style={{ width: 1, background: '#333', height: 16 }} />
 
         {/* Visibility Toggles */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#151515', padding: '4px 12px', borderRadius: 20, border: '1px solid #333', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#aaa', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 'bold' }}>
-            <input type="checkbox" checked={showFootprint} onChange={e => setShowFootprint(e.target.checked)} style={{ accentColor: '#00e5ff', width: 12, height: 12 }} /> FP
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#aaa', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 'bold' }}>
-            <input type="checkbox" checked={showLoad1} onChange={e => setShowLoad1(e.target.checked)} style={{ accentColor: '#00e5ff', width: 12, height: 12 }} /> L1
-          </label>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#aaa', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 'bold' }}>
-            <input type="checkbox" checked={showLoad2} onChange={e => setShowLoad2(e.target.checked)} style={{ accentColor: '#00e5ff', width: 12, height: 12 }} /> L2
-          </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, background: 'rgba(0,0,0,0.2)', padding: '5px 12px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.05)' }}>
+          {[
+            { id: 'FP', label: 'FP', state: showFootprint, set: setShowFootprint, col: '#fff' },
+            { id: 'L1', label: 'L1', state: showLoad1, set: setShowLoad1, col: '#4CAF50' },
+            { id: 'L2', label: 'L2', state: showLoad2, set: setShowLoad2, col: '#2196F3' }
+          ].map(t => (
+            <label key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, color: t.state ? t.col : '#555', fontSize: '0.65rem', cursor: 'pointer', fontWeight: '800', transition: 'all 0.2s' }}>
+              <input type="checkbox" checked={t.state} onChange={e => t.set(e.target.checked)} style={{ accentColor: t.col, width: 12, height: 12, cursor: 'pointer' }} />
+              {t.label}
+            </label>
+          ))}
           {viewMode === 'Sweep Steps' && (
             <>
-               <div style={{ width: 1, background: '#444', height: 12, margin: '0 4px' }} />
-               <label style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#ff9800', fontSize: '0.65rem', cursor: 'pointer', fontWeight: 'bold' }}>
-                 <input type="checkbox" checked={fillSweeps} onChange={e => setFillSweeps(e.target.checked)} style={{ accentColor: '#ff9800', width: 12, height: 12 }} /> Shade Inside
+               <div style={{ width: 1, background: 'rgba(255,255,255,0.1)', height: 12, margin: '0 4px' }} />
+               <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: fillSweeps ? '#ff9800' : '#555', fontSize: '0.65rem', cursor: 'pointer', fontWeight: '800' }}>
+                 <input type="checkbox" checked={fillSweeps} onChange={e => setFillSweeps(e.target.checked)} style={{ accentColor: '#ff9800', width: 12, height: 12, cursor: 'pointer' }} />
+                 SHADE
                </label>
             </>
           )}
         </div>
 
         {viewMode === 'Composite' && isEditMode && (
-          <div style={{ 
-            display: 'flex', 
-            background: '#151515', 
-            padding: 3, 
-            borderRadius: 20, 
-            gap: 2, 
-            border: '1px solid #333',
-            boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.5)'
-          }}>
-             <button onClick={() => setResultsMode('polygon')} 
-               style={{ 
-                 background: resultsMode === 'polygon' ? '#333' : 'transparent', 
-                 color: resultsMode === 'polygon' ? '#00e5ff' : '#666', 
-                 border: 'none', 
-                 padding: '5px 15px', 
-                 fontSize: '0.65rem', 
-                 fontWeight: '700', 
-                 cursor: 'pointer', 
-                 borderRadius: 18,
-                 transition: 'all 0.2s ease',
-                 letterSpacing: '0.05em'
-               }}>
+          <div className="segmented-control">
+             <button onClick={() => setResultsMode('polygon')} className={`segmented-btn ${resultsMode === 'polygon' ? 'active' : ''}`}>
                POLYGON
              </button>
-             <button onClick={() => setResultsMode('cad')} 
-               style={{ 
-                 background: resultsMode === 'cad' ? '#333' : 'transparent', 
-                 color: resultsMode === 'cad' ? '#00e5ff' : '#666', 
-                 border: 'none', 
-                 padding: '5px 15px', 
-                 fontSize: '0.65rem', 
-                 fontWeight: '700', 
-                 cursor: 'pointer', 
-                 borderRadius: 18,
-                 transition: 'all 0.2s ease',
-                 letterSpacing: '0.05em'
-               }}>
+             <button onClick={() => setResultsMode('cad')} className={`segmented-btn ${resultsMode === 'cad' ? 'active' : ''}`}>
                CAD
              </button>
           </div>
@@ -771,12 +768,12 @@ const Results = ({ globals }) => {
 
         {isEditMode && resultsMode === 'cad' && viewMode === 'Composite' && (
           <div style={{ display: 'flex', gap: 5, background: '#222', padding: '2px 8px', borderRadius: 6, alignItems: 'center', marginLeft: 10 }}>
-            <button onClick={() => setActiveTool('select')} style={{ background: activeTool === 'select' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><MousePointer2 size={16} /></button>
-            <button onClick={() => setActiveTool('line')} style={{ background: activeTool === 'line' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><PenLine size={16} /></button>
-            <button onClick={() => setActiveTool('circle')} style={{ background: activeTool === 'circle' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><CircleIcon size={16} /></button>
-            <button onClick={() => setActiveTool('rect')} style={{ background: activeTool === 'rect' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Square size={16} /></button>
-            <button onClick={() => setActiveTool('dimension')} style={{ background: activeTool === 'dimension' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Ruler size={16} /></button>
-            <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
+            <button onClick={() => setActiveTool('select')} style={{ background: activeTool === 'select' ? 'var(--primary)' : 'transparent', color: activeTool === 'select' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><SelectionPlus size={16} weight="bold" /></button>
+            <button onClick={() => setActiveTool('line')} style={{ background: activeTool === 'line' ? 'var(--primary)' : 'transparent', color: activeTool === 'line' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><LineSegment size={16} weight="bold" /></button>
+            <button onClick={() => setActiveTool('rect')} style={{ background: activeTool === 'rect' ? 'var(--primary)' : 'transparent', color: activeTool === 'rect' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><Rectangle size={16} weight="bold" /></button>
+            <button onClick={() => setActiveTool('circle')} style={{ background: activeTool === 'circle' ? 'var(--primary)' : 'transparent', color: activeTool === 'circle' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><CircleIcon size={16} weight="bold" /></button>
+            <button onClick={() => setActiveTool('dimension')} style={{ background: activeTool === 'dimension' ? 'var(--primary)' : 'transparent', color: activeTool === 'dimension' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><Ruler size={16} weight="bold" /></button>
+            <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
             
             <button onClick={() => {
               if (cadRef.current && cadRef.current.hasSelection) {
@@ -785,21 +782,21 @@ const Results = ({ globals }) => {
                 setIsConstructionMode(!isConstructionMode);
               }
             }} title={cadRef.current && cadRef.current.hasSelection ? "Toggle Construction for Selected" : "Toggle Construction Mode for New Shapes"}
-              style={{ background: isConstructionMode ? '#5c4d1a' : (cadRef.current && cadRef.current.hasSelection ? '#333' : 'transparent'), color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-               <Hammer size={16} />
+              style={{ background: isConstructionMode ? '#5c4d1a' : (cadRef.current && cadRef.current.hasSelection ? '#333' : 'transparent'), color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}>
+               <Hammer size={16} weight="bold" />
             </button>
             <button onClick={() => setIsSubtractionMode(!isSubtractionMode)} title="Toggle Subtraction Mode (Removal)"
-              style={{ background: isSubtractionMode ? '#5c1a1a' : 'transparent', color: isSubtractionMode ? '#ff5252' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-               <Minus size={16} />
+              style={{ background: isSubtractionMode ? '#5c1a1a' : 'transparent', color: isSubtractionMode ? '#ff5252' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}>
+               <Subtract size={16} weight="fill" />
             </button>
-            <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
+            <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
             <button 
               onClick={isEditMode && resultsMode === 'cad' ? handleCadUndo : undo} 
-              style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }} 
+              style={{ background: 'transparent', color: '#666', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }} 
               title="Undo">
-              <Undo2 size={16} />
+              <ArrowUUpLeft size={16} weight="bold" />
             </button>
-            <button onClick={handleClearSketch} style={{ background: 'transparent', color: '#ff5252', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}><Trash2 size={16} /></button>
+            <button onClick={handleClearSketch} style={{ background: 'transparent', color: 'rgba(255, 82, 82, 0.4)', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><Trash size={16} weight="bold" /></button>
             <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
             <button onClick={async () => {
               const finalWkt = previewFieldWkt;
@@ -821,6 +818,7 @@ const Results = ({ globals }) => {
               const idx = updatedCases.findIndex(c => c.id === selectedCaseId);
               if (idx !== -1) {
                 updatedCases[idx] = { ...updatedCases[idx], custom_dxf: finalWkt };
+                pushToHistory();
                 setEvaluationCases(updatedCases);
                 
                 // 3. Trigger immediate calculation with updated case to avoid race condition
@@ -869,29 +867,32 @@ const Results = ({ globals }) => {
         )}
 
         <div style={{ display: 'flex', gap: 6 }}>
-           <button onClick={() => setCaseListOpen(!caseListOpen)} title="Toggle Case List" style={{ background: caseListOpen ? '#1a3a5c' : '#222', color: '#ccc', border: 'none', padding: '5px', borderRadius: 4, cursor: 'pointer' }}><List size={14}/></button>
-           <button onClick={() => setInspectorOpen(!inspectorOpen)} title="Toggle Inspector" style={{ background: inspectorOpen ? '#1a3a5c' : '#222', color: '#ccc', border: 'none', padding: '5px', borderRadius: 4, cursor: 'pointer' }}><Info size={14}/></button>
+          <button onClick={undo} title="Global Undo (Ctrl+Z)" className="toolbar-action-btn" style={{ background: 'rgba(0,0,0,0.2)', color: '#666', border: 'none', padding: '6px' }}>
+            <ArrowUUpLeft size={14} weight="bold" />
+          </button>
+          <div style={{ width: 1, background: 'rgba(255,255,255,0.1)', height: 16, margin: '0 4px' }} />
+          <button onClick={() => setCaseListOpen(!caseListOpen)} title="Toggle Case List" className="toolbar-action-btn" style={{ background: caseListOpen ? 'var(--primary)' : 'rgba(0,0,0,0.2)', color: caseListOpen ? '#fff' : '#666', border: 'none', padding: '6px' }}><List size={14} weight="bold" /></button>
+          <button onClick={() => setInspectorOpen(!inspectorOpen)} title="Toggle Inspector" className="toolbar-action-btn" style={{ background: inspectorOpen ? 'var(--primary)' : 'rgba(0,0,0,0.2)', color: inspectorOpen ? '#fff' : '#666', border: 'none', padding: '6px' }}><Info size={14} weight="bold" /></button>
         </div>
 
-        <div style={{ width: 1, background: '#333', height: 16, marginLeft: 6, marginRight: 6 }} />
+        <div style={{ width: 1, background: 'rgba(255,255,255,0.1)', height: 16, marginLeft: 4, marginRight: 4 }} />
 
         {viewMode === 'Composite' && (
-          <>
-            <button onClick={() => setIsEditMode(!isEditMode)} style={{ background: isEditMode ? '#d32f2f' : '#2a2a2a', color: 'white', border: 'none', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold', marginRight: 6 }}>
-              {isEditMode ? (resultsMode === 'cad' ? 'EXIT' : 'DONE') : '✏️ EDIT'}
-            </button>
-          </>
+          <button onClick={() => setIsEditMode(!isEditMode)} className={`toolbar-action-btn ${isEditMode ? 'danger' : 'primary'}`} style={{ minWidth: 90, justifyContent: 'center', gap: 6 }}>
+            {isEditMode ? (resultsMode === 'cad' ? 'EXIT' : 'DONE') : <><PencilSimple size={14} weight="fill" /> EDIT</>}
+          </button>
         )}
 
-        <button onClick={() => setIsGenOpen(true)} style={{ background: '#222', color: '#00e5ff', border: '1px solid #333', padding: '4px 10px', borderRadius: 4, cursor: 'pointer', fontSize: '0.7rem', fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 5, marginRight: 5 }}>
-          <Settings size={14} /> EVALUATION
+        <button onClick={() => setIsGenOpen(true)} className="toolbar-action-btn">
+          <Sliders size={14} weight="bold" color="#00e5ff" /> EVALUATION
         </button>
 
-        <button onClick={handleCalculate} disabled={isCalculating} style={{ background: '#1e4a8a', color: 'white', border: 'none', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
-          {isCalculating ? '...' : '▶ CALC'}
+        <button onClick={handleCalculate} disabled={isCalculating} className="toolbar-action-btn info">
+          {isCalculating ? '...' : <><Play size={14} weight="bold" /> CALC</>}
         </button>
-        <button onClick={handleCalculateAll} disabled={isCalculating} style={{ background: '#1b5e20', color: 'white', border: 'none', padding: '4px 12px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
-          ▶▶ ALL
+        
+        <button onClick={handleCalculateAll} disabled={isCalculating} className="toolbar-action-btn success">
+          <Lightning size={14} weight="bold" /> ALL
         </button>
       </div>
 
@@ -902,21 +903,26 @@ const Results = ({ globals }) => {
           <div className="modal-overlay">
             <div className="modal-content">
               <div className="modal-header">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <Settings size={20} color="#00e5ff" />
-                  <h2 style={{ margin: 0, fontSize: '1.1rem', color: '#fff' }}>Evaluation Cases Configuration</h2>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ padding: 8, background: 'rgba(0,229,255,0.1)', borderRadius: 10 }}>
+                    <Sliders size={20} color="#00e5ff" />
+                  </div>
+                  <div>
+                    <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#fff', letterSpacing: '0.02em' }}>EVALUATION MATRIX</h2>
+                    <p style={{ margin: 0, fontSize: '0.65rem', color: '#666', fontWeight: 500 }}>Global config and generation parameters</p>
+                  </div>
                 </div>
-                <button onClick={() => setIsGenOpen(false)} style={{ background: 'transparent', border: 'none', color: '#888', cursor: 'pointer' }}>
+                <button onClick={() => setIsGenOpen(false)} style={{ background: 'transparent', border: 'none', color: '#444', cursor: 'pointer', transition: 'color 0.2s' }} onMouseEnter={e => e.target.style.color='#fff'} onMouseLeave={e => e.target.style.color='#444'}>
                   <X size={24} />
                 </button>
               </div>
               <div className="modal-body">
                 <Generation globals={globals} />
               </div>
-              <div style={{ padding: '15px 25px', background: '#222', borderTop: '1px solid #333', textAlign: 'right' }}>
-                 <button onClick={() => setIsGenOpen(false)} style={{ background: '#00e5ff', color: '#000', border: 'none', padding: '8px 25px', borderRadius: 4, cursor: 'pointer', fontWeight: 'bold' }}>
-                   Close
-                 </button>
+              <div style={{ padding: '15px 25px', background: 'rgba(0,0,0,0.2)', borderTop: '1px solid rgba(255,255,255,0.05)', textAlign: 'right', display: 'flex', justifyContent: 'flex-end' }}>
+               <button onClick={() => setIsGenOpen(false)} className="toolbar-action-btn primary" style={{ padding: '12px 60px', borderRadius: 12, fontSize: '1rem', fontWeight: 800 }}>
+                 Done
+               </button>
               </div>
             </div>
           </div>

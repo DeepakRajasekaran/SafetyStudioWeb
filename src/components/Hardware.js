@@ -2,17 +2,17 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { 
   Plus, 
-  Trash2, 
-  Cpu, 
-  Layers, 
+  Trash, 
   Download, 
+  Stack, 
+  DownloadSimple, 
   FileArchive, 
   ShieldCheck, 
   ArrowRight,
-  ChevronRight,
-  Settings,
-  AlertTriangle
-} from 'lucide-react';
+  CaretRight,
+  Gear,
+  Warning
+} from '@phosphor-icons/react';
 
 const Hardware = ({ globals }) => {
   const { evaluationCases, results, fieldsets, setFieldsets, sensors, geometry, physics, maxFields, setMaxFields } = globals;
@@ -161,20 +161,20 @@ const Hardware = ({ globals }) => {
         <div className="hardware-header">
           <h3>Fieldsets</h3>
           <button onClick={addFs} className="icon-btn" title="Add New Set" disabled={isAtCapacity} style={{ opacity: isAtCapacity ? 0.3 : 1 }}>
-            <Plus size={18} />
+            <Plus size={18} weight="bold" />
           </button>
         </div>
         
         <div className="hardware-list">
           {fieldsets.map((fs, i) => (
             <div key={i} className={`hw-item ${selectedFsIndex === i ? 'selected' : ''}`} onClick={() => setSelectedFsIndex(i)}>
-              <Layers size={14} style={{ color: selectedFsIndex === i ? '#2196F3' : '#666' }} />
+              <Stack size={14} weight="bold" style={{ color: selectedFsIndex === i ? '#2196F3' : '#666' }} />
               <input value={fs.name} onChange={(e) => updateFsName(i, e.target.value)} 
                      onClick={(e) => e.stopPropagation()}
                      className="hw-input"
                      style={{ background: 'transparent', border: 'none', padding: 0 }} />
               <button onClick={(e) => { e.stopPropagation(); delFs(i); }} className="icon-btn red">
-                <Trash2 size={14} />
+                <Trash size={14} weight="bold" />
               </button>
             </div>
           ))}
@@ -182,7 +182,7 @@ const Hardware = ({ globals }) => {
 
         <div style={{ padding: '16px', borderTop: '2px solid #333' }}>
           <button onClick={autoGen} className="primary-btn" style={{ width: '100%', padding: '10px' }}>
-            <Settings size={16} /> Auto-Gen Fieldsets
+            <Gear size={16} weight="bold" /> Auto-Gen Fieldsets
           </button>
         </div>
       </div>
@@ -197,45 +197,45 @@ const Hardware = ({ globals }) => {
                 <span style={{ fontWeight: 'bold' }}>{fieldsets[selectedFsIndex].name}</span>
               </div>
               <button onClick={() => addField(selectedFsIndex)} className="primary-btn" disabled={isAtCapacity} style={{ padding: '6px 12px', fontSize: '0.75rem', opacity: isAtCapacity ? 0.5 : 1 }}>
-                <Plus size={14} /> Add Field
+                <Plus size={14} weight="bold" /> Add Field
               </button>
             </div>
             
-            <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-              <table className="hw-table">
+            <div style={{ flex: 1, overflowY: 'auto', padding: '10px 24px' }}>
+              <table className="hw-table" style={{ tableLayout: 'fixed' }}>
                 <thead>
                   <tr>
-                    <th>Field Name</th>
-                    <th>Source Case</th>
-                    <th style={{ width: 50 }}></th>
+                    <th style={{ width: '35%' }}>Field Name</th>
+                    <th style={{ width: '55%' }}>Source Case</th>
+                    <th style={{ width: '10%', textAlign: 'right' }}></th>
                   </tr>
                 </thead>
                 <tbody>
                   {fieldsets[selectedFsIndex].fields.map((f, i) => (
                     <tr key={i}>
-                      <td>
+                      <td style={{ paddingRight: '12px' }}>
                         <input value={f.name} readOnly 
                                style={{ opacity: 0.7, cursor: 'not-allowed' }}
                                className="hw-input" />
                       </td>
-                      <td>
+                      <td style={{ paddingRight: '12px' }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                           <select value={f.caseId} onChange={(e) => updateField(selectedFsIndex, i, 'caseId', Number(e.target.value))}
-                                  className="hw-input" style={{ flex: 1 }}>
+                                  className="hw-input" style={{ flex: 1, height: '38px', padding: '0 12px' }}>
                             {evaluationCases.map(k => (
                               <option key={k.id} value={k.id}>Case {k.id}: v={k.v} w={k.w} ({k.load})</option>
                             ))}
                           </select>
                           {!results[f.caseId] && (
-                            <div title="Missing calculated results" style={{ color: '#ff9800' }}>
-                              <AlertTriangle size={14} />
+                            <div title="Missing calculated results" style={{ color: '#ff9800', display: 'flex', alignItems: 'center' }}>
+                              <Warning size={16} weight="bold" />
                             </div>
                           )}
                         </div>
                       </td>
                       <td style={{ textAlign: 'right' }}>
-                        <button onClick={() => delField(selectedFsIndex, i)} className="icon-btn red">
-                          <Trash2 size={16} />
+                        <button onClick={() => delField(selectedFsIndex, i)} className="icon-btn red" style={{ marginLeft: 'auto' }}>
+                          <Trash size={16} weight="bold" />
                         </button>
                       </td>
                     </tr>
@@ -245,10 +245,15 @@ const Hardware = ({ globals }) => {
             </div>
           </>
         ) : (
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#444' }}>
-            <ShieldCheck size={48} style={{ marginBottom: 15, opacity: 0.2 }} />
-            <p>Select a fieldset from the left to manage configuration.</p>
-          </div>
+          <>
+            <div className="hardware-header">
+               {/* Spacer header to keep horizontal borders aligned */}
+            </div>
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#333' }}>
+              <ShieldCheck size={48} weight="bold" style={{ marginBottom: 15, opacity: 0.1 }} />
+              <p style={{ fontSize: '0.85rem' }}>Select a fieldset from the left to configure.</p>
+            </div>
+          </>
         )}
       </div>
 
@@ -261,7 +266,7 @@ const Hardware = ({ globals }) => {
         <div style={{ padding: '20px', overflowY: 'auto' }}>
           {sensors.length === 0 ? (
             <div style={{ color: '#444', textAlign: 'center', marginTop: 40 }}>
-              <Cpu size={32} style={{ marginBottom: 16, opacity: 0.3 }} />
+              <Download size={32} weight="bold" style={{ marginBottom: 16, opacity: 0.3 }} />
               <p style={{ fontSize: '0.8rem' }}>No LiDARs configured in Editor tab.</p>
             </div>
           ) : (
@@ -272,23 +277,23 @@ const Hardware = ({ globals }) => {
                     <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#2196F3' }}>{s.name}</div>
                     <div style={{ fontSize: '0.7rem', color: '#666', marginTop: 2 }}>{s.model}</div>
                   </div>
-                  <Cpu size={20} color="#333" />
+                  <Download size={20} weight="bold" color="#333" />
                 </div>
                 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <button onClick={() => handleExportSick(i)} disabled={isExporting} className="primary-btn" style={{ justifyContent: 'space-between' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <Download size={16} />
+                      <DownloadSimple size={16} weight="bold" />
                       <span>{s.model.includes('Sick') ? 'Export SICK Config' : 'Export XML'}</span>
                     </div>
-                    <ChevronRight size={14} opacity={0.5} />
+                    <CaretRight size={14} weight="bold" opacity={0.5} />
                   </button>
                   <button onClick={() => handleExportLeuze(i)} disabled={isExporting} className="secondary-btn" style={{ justifyContent: 'space-between', background: '#333' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <FileArchive size={16} />
+                      <FileArchive size={16} weight="bold" />
                       <span>Export CSV ZIP</span>
                     </div>
-                    <ChevronRight size={14} opacity={0.5} />
+                    <CaretRight size={14} weight="bold" opacity={0.5} />
                   </button>
                 </div>
               </div>

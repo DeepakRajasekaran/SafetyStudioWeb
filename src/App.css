@@ -90,28 +90,39 @@ body {
 .tab-btn {
   background: none;
   border: none;
-  color: #4a4a5a;
+  color: #555;
   width: 100%;
   height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  border-radius: 12px;
+  border-radius: 4px;
   position: relative;
   transition: all 0.2s ease;
   flex-shrink: 0;
 }
 
 .tab-btn:hover {
-  color: #e0e0e0;
-  background: rgba(255,255,255,0.06);
+  color: #ddd;
+  background: rgba(255,255,255,0.04);
 }
 
 .tab-btn.active {
-  color: #00e5ff;
-  background: rgba(0, 229, 255, 0.08);
-  box-shadow: 0 0 18px rgba(0,229,255,0.12), inset 0 0 12px rgba(0,229,255,0.05);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.tab-btn.active::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 20%;
+  bottom: 20%;
+  width: 3px;
+  background: #ffffff;
+  border-radius: 0 4px 4px 0;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
 }
 
 /* Tooltip */
@@ -126,7 +137,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.04em;
   padding: 6px 12px;
-  border-radius: 8px;
+  border-radius: 4px;
   border: 1px solid rgba(255,255,255,0.08);
   white-space: nowrap;
   pointer-events: none;
@@ -475,13 +486,14 @@ body {
 }
 
 .hardware-header {
-  padding: 16px 20px;
+  padding: 0 20px;
   background: #1a1a1a;
   border-bottom: 2px solid var(--border-color);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  min-height: 60px;
+  height: 64px; /* Fixed height for border alignment */
+  box-sizing: border-box;
 }
 
 .hardware-header h3 {
@@ -540,38 +552,52 @@ body {
 .hw-table {
   width: 100%;
   border-collapse: separate;
-  border-spacing: 0 8px;
+  border-spacing: 0 4px; /* Reduced spacing for tighter alignment */
 }
 
 .hw-table th {
   padding: 12px 16px;
   text-align: left;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   text-transform: uppercase;
+  letter-spacing: 0.1em;
+  opacity: 0.6;
 }
 
 .hw-table td {
-  padding: 8px 16px;
-  background: rgba(255,255,255,0.02);
+  padding: 4px 0;
+  vertical-align: middle;
 }
 
-.hw-table tr td:first-child { border-radius: 8px 0 0 8px; }
-.hw-table tr td:last-child { border-radius: 0 8px 8px 0; }
-
 .hw-input {
-  background: #111;
-  border: 1px solid #333;
-  color: white;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: #fff;
   padding: 8px 12px;
   border-radius: 6px;
   width: 100%;
-  transition: border-color 0.2s;
+  font-size: 0.85rem;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  transition: all 0.2s;
 }
 
 .hw-input:focus {
   border-color: #2196F3;
+  background: rgba(0, 0, 0, 0.4);
   outline: none;
+  box-shadow: 0 0 0 2px rgba(33, 150, 243, 0.1);
+}
+
+select.hw-input {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 35px;
 }
 
 .icon-btn {
@@ -595,4 +621,92 @@ body {
 .icon-btn.red:hover {
   background: rgba(244, 67, 54, 0.1);
   color: #f44336;
+}
+
+/* --- Modernized Toolbar & Segmented Controls --- */
+.segmented-control {
+  display: flex;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 4px;
+  border-radius: 10px;
+  gap: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.segmented-btn {
+  background: transparent;
+  color: #666;
+  border: none;
+  padding: 6px 14px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  cursor: pointer;
+  border-radius: 7px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.segmented-btn:hover {
+  color: #aaa;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.segmented-btn.active {
+  background: var(--primary);
+  color: #fff;
+  box-shadow: 0 2px 10px rgba(34, 74, 37, 0.4);
+}
+
+.toolbar-action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--secondary);
+  color: white;
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  padding: 5px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.toolbar-action-btn:hover {
+  background: var(--secondary-hover);
+  transform: translateY(-1px);
+}
+
+.toolbar-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.toolbar-action-btn.primary {
+  background: var(--primary);
+}
+
+.toolbar-action-btn.primary:hover {
+  background: var(--primary-hover);
+}
+
+.toolbar-action-btn.danger {
+  background: rgba(220, 38, 38, 0.1);
+  color: #ef4444;
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+.toolbar-action-btn.danger:hover {
+  background: rgba(220, 38, 38, 0.2);
+}
+
+.toolbar-action-btn.success {
+  background: #1b5e20;
+}
+
+.toolbar-action-btn.info {
+  background: #1e4a8a;
 }

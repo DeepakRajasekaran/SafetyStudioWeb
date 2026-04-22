@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { 
-  Home as HomeIcon, 
-  PencilRuler, 
-  BarChart3, 
+  HouseLine, 
+  CompassTool, 
+  Polygon, 
   Download, 
   Cpu, 
-  HelpCircle,
+  Question,
   X
-} from 'lucide-react';
+} from '@phosphor-icons/react';
 import "./App.css";
 import logo from "./assets/logo.svg";
 
@@ -240,11 +240,11 @@ function App() {
   };
 
   const tabs = [
-    { id: 'Home', icon: HomeIcon, label: 'Home' },
-    { id: 'Editor', icon: PencilRuler, label: 'CAD Editor' },
-    { id: 'Results', icon: BarChart3, label: 'Results & Solver' },
-    { id: 'Hardware', icon: Cpu, label: 'Hardware Config' },
-    { id: 'Help', icon: HelpCircle, label: 'Documentation' },
+    { id: 'Home', icon: HouseLine, label: 'Home' },
+    { id: 'Editor', icon: CompassTool, label: 'CAD Editor' },
+    { id: 'Results', icon: Polygon, label: 'Results & Solver' },
+    { id: 'Hardware', icon: Download, label: 'Hardware Config' },
+    { id: 'Help', icon: Question, label: 'Documentation' },
   ];
 
   return (
@@ -260,17 +260,18 @@ function App() {
           {tabs.map((tab) => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                className={`tab-btn ${isActive ? 'active' : ''}`}
-                onClick={() => setActiveTab(tab.id)}
-                title={tab.label}
-              >
-                <Icon size={20} strokeWidth={isActive ? 2.5 : 1.8} />
-                <span className="tab-tooltip">{tab.label}</span>
-              </button>
-            );
+              return (
+                <button
+                  key={tab.id}
+                  className={`tab-btn ${isActive ? 'active' : ''}`}
+                  onClick={() => setActiveTab(tab.id)}
+                  title={tab.label}
+                  style={{ color: isActive ? '#ffffff' : '#666' }}
+                >
+                  <Icon size={24} weight="bold" />
+                  <span className="tab-tooltip">{tab.label}</span>
+                </button>
+              );
           })}
         </nav>
 

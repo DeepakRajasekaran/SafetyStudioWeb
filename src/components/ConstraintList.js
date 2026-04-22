@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash } from '@phosphor-icons/react';
 
 const ConstraintList = ({ constraints, setConstraints, dimensions, setDimensions, fixedPoints = [], setFixedPoints }) => {
   if (!constraints.length && !dimensions.length && !fixedPoints.length) return null;
@@ -42,7 +42,7 @@ const ConstraintList = ({ constraints, setConstraints, dimensions, setDimensions
               ✏️
             </button>
             <button onClick={() => setDimensions(prev => prev.filter(x => x.id !== d.id))} style={{ background: 'transparent', border: 'none', color: '#ff5252', cursor: 'pointer', padding: 2 }}>
-              <Trash2 size={12} />
+              <Trash size={12} weight="bold" />
             </button>
           </div>
         </div>
@@ -64,7 +64,7 @@ const ConstraintList = ({ constraints, setConstraints, dimensions, setDimensions
               }
             }} 
             style={{ background: 'transparent', border: 'none', color: '#ff5252', cursor: 'pointer', padding: 4 }}>
-            <Trash2 size={12} />
+            <Trash size={12} weight="bold" />
           </button>
         </div>
       ))}
@@ -79,7 +79,7 @@ const ConstraintList = ({ constraints, setConstraints, dimensions, setDimensions
             </span>
           </div>
           <button onClick={() => setConstraints(prev => prev.filter(x => x.id !== c.id))} style={{ background: 'transparent', border: 'none', color: '#ff5252', cursor: 'pointer', padding: 4 }}>
-            <Trash2 size={12} />
+            <Trash size={12} weight="bold" />
           </button>
         </div>
       ))}

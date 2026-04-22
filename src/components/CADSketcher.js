@@ -872,9 +872,10 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
           y={Math.min(selectionBox.startY, selectionBox.endY)}
           width={Math.abs(selectionBox.startX - selectionBox.endX)}
           height={Math.abs(selectionBox.startY - selectionBox.endY)}
-          fill="rgba(0, 229, 255, 0.2)"
+          fill="rgba(0, 229, 255, 0.15)"
           stroke="#00e5ff"
           strokeWidth={1 / scale}
+          dash={[4 / scale, 2 / scale]}
           listening={false}
         />
       )}
