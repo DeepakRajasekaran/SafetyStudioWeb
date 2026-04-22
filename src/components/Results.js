@@ -884,7 +884,7 @@ const Results = ({ globals }) => {
           </button>
         )}
 
-        <button onClick={() => setIsGenOpen(true)} className="toolbar-action-btn" style={{ background: '#a855f7', color: '#fff' }}>
+        <button onClick={() => setIsGenOpen(true)} className="toolbar-action-btn" style={{ background: '#581c87', color: '#fff' }}>
           <Stack size={14} weight="bold" color="#fff" /> EVALUATION
         </button>
 
@@ -905,8 +905,8 @@ const Results = ({ globals }) => {
             <div className="modal-content">
               <div className="modal-header">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ padding: 8, background: 'rgba(0,229,255,0.1)', borderRadius: 10 }}>
-                    <Sliders size={20} color="#00e5ff" />
+                  <div style={{ padding: 8, background: 'rgba(168,85,247,0.1)', borderRadius: 10 }}>
+                    <Stack size={20} weight="bold" color="#a855f7" />
                   </div>
                   <div>
                     <h2 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: '#fff', letterSpacing: '0.02em' }}>EVALUATION MATRIX</h2>
