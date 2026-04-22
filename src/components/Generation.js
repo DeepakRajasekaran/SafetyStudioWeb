@@ -481,11 +481,11 @@ const Generation = ({ globals }) => {
             </table>
 
             <div style={{ marginTop: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-               <button onClick={handlePopulateTable} className="action-btn-primary" style={{ gridColumn: 'span 2' }}>
-                 <StackPlus size={16} weight="bold" /> GENERATE ALL CASES
-               </button>
                <button onClick={handleScaleToHardware} className="action-btn-secondary" style={{ gridColumn: 'span 2' }}>
                  <GearSix size={16} weight="bold" /> SCALE TO HARDWARE
+               </button>
+               <button onClick={handlePopulateTable} className="action-btn-primary" style={{ gridColumn: 'span 2' }}>
+                 <StackPlus size={16} weight="bold" /> GENERATE ALL CASES
                </button>
                <button onClick={handleAddMiscCase} className="action-btn-secondary">
                  <Plus size={16} /> ADD MISC

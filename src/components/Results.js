@@ -24,6 +24,7 @@ import {
   Subtract, 
   X, 
   PencilSimple,
+  Stack,
   DownloadSimple, 
   Play, 
   Lightning 
@@ -883,8 +884,8 @@ const Results = ({ globals }) => {
           </button>
         )}
 
-        <button onClick={() => setIsGenOpen(true)} className="toolbar-action-btn">
-          <Sliders size={14} weight="bold" color="#00e5ff" /> EVALUATION
+        <button onClick={() => setIsGenOpen(true)} className="toolbar-action-btn" style={{ background: '#a855f7', color: '#fff' }}>
+          <Stack size={14} weight="bold" color="#fff" /> EVALUATION
         </button>
 
         <button onClick={handleCalculate} disabled={isCalculating} className="toolbar-action-btn info">
@@ -1021,7 +1022,7 @@ const Results = ({ globals }) => {
                 )}
 
                 {/* 6. Active Evaluated Load Outline (Z 20) */}
-                {viewMode !== 'Sweep Steps' && currentResult?.load_wkt && (
+                {currentResult?.load_wkt && (
                   (currentResult.load === 'Load1' && showLoad1) || 
                   (currentResult.load === 'Load2' && showLoad2)
                 ) && parseWktWithTransform(currentResult.load_wkt, tObj.fn).map((poly, i) => {
