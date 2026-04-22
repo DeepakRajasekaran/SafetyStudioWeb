@@ -277,18 +277,6 @@ function App() {
         {/* Spacer */}
         <div style={{ flex: 1 }} />
 
-        {/* Bottom utility zone */}
-        <div className="sidebar-bottom">
-          <div className="sidebar-divider" />
-          <button
-            className="tab-btn tab-btn-danger"
-            onClick={clearSession}
-            title="Clear Session"
-          >
-            <X size={16} strokeWidth={2} />
-            <span className="tab-tooltip">Clear Session</span>
-          </button>
-        </div>
       </header>
       <main className="App-main">{renderTabContent()}</main>
     </div>
