@@ -11,7 +11,8 @@ import {
   ArrowRight,
   CaretRight,
   Gear,
-  Warning
+  Warning,
+  Database
 } from '@phosphor-icons/react';
 
 const Hardware = ({ globals }) => {
@@ -153,6 +154,28 @@ const Hardware = ({ globals }) => {
     } finally { setIsExporting(false); }
   };
 
+  const handleExportDb = async () => {
+    setIsExporting(true);
+    try {
+      const payload = { 
+        geometry, 
+        sensors, 
+        physics, 
+        evaluationCases, 
+        fieldsets 
+      };
+      const res = await axios.post('/api/export_db', payload, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `safety_export.db`);
+      document.body.appendChild(link);
+      link.click();
+    } catch (err) {
+      alert("DB Export failed: " + (err.response?.data?.error || err.message));
+    } finally { setIsExporting(false); }
+  };
+
   return (
     <div className="hardware-container">
       
@@ -264,6 +287,24 @@ const Hardware = ({ globals }) => {
         </div>
         
         <div style={{ padding: '20px', overflowY: 'auto' }}>
+          
+          <div className="hw-export-card" style={{ background: 'rgba(33, 150, 243, 0.05)', border: '1px solid rgba(33, 150, 243, 0.2)', marginBottom: 20 }}>
+             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div>
+                   <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#2196F3' }}>Global Project Export</div>
+                   <div style={{ fontSize: '0.7rem', color: '#666', marginTop: 2 }}>SQLite Database (.db)</div>
+                </div>
+                <Database size={20} weight="bold" color="#2196F3" />
+             </div>
+             <button onClick={handleExportDb} disabled={isExporting} className="primary-btn" style={{ background: '#1e3a5f', borderColor: '#2196F3' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                   <Download size={16} weight="bold" />
+                   <span>Export Safety DB</span>
+                </div>
+                <CaretRight size={14} weight="bold" opacity={0.5} />
+             </button>
+          </div>
+
           {sensors.length === 0 ? (
             <div style={{ color: '#444', textAlign: 'center', marginTop: 40 }}>
               <Download size={32} weight="bold" style={{ marginBottom: 16, opacity: 0.3 }} />

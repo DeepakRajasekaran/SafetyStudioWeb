@@ -10,6 +10,9 @@ import xml.etree.ElementTree as ET
 from shapely import wkt
 from shapely.ops import unary_union
 from caseExport import generate_casesxml
+import sqlite3
+import tempfile
+import shutil
 
 app = Flask(__name__)
 CORS(app)
@@ -308,6 +311,83 @@ def export_leuze():
         
     except Exception as e:
         import traceback
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+@app.route('/api/export_db', methods=['POST'])
+def export_db():
+    data = request.json
+    try:
+        # Create a temporary file for the database
+        fd, temp_db_path = tempfile.mkstemp(suffix=".db")
+        os.close(fd)
+        
+        # Connect and initialize schema
+        conn = sqlite3.connect(temp_db_path)
+        cursor = conn.cursor()
+        
+        template_path = "assets/template.sql"
+        if os.path.exists(template_path):
+            with open(template_path, 'r') as f:
+                sql_script = f.read()
+                cursor.executescript(sql_script)
+        else:
+            # Fallback schema if template missing
+            cursor.execute("CREATE TABLE geometries (name TEXT PRIMARY KEY, type TEXT, wkt TEXT)")
+            cursor.execute("CREATE TABLE sensors (name TEXT PRIMARY KEY, x REAL, y REAL, mount_deg REAL, fov_deg REAL, range_m REAL, dia_m REAL)")
+            cursor.execute("CREATE TABLE physics_params (key TEXT PRIMARY KEY, value TEXT)")
+            cursor.execute("CREATE TABLE evaluation_matrix (case_id INTEGER PRIMARY KEY, load_name TEXT, v_max REAL, w_max REAL, hardware_field_id INTEGER)")
+
+        # 1. Populate geometries
+        geom = data.get('geometry', {})
+        if geom.get('FootPrint'):
+            cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('footprint', 'footprint', geom['FootPrint']))
+        if geom.get('Load1'):
+            cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('Load1', 'load', geom['Load1']))
+        if geom.get('Load2'):
+            cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('Load2', 'load', geom['Load2']))
+        
+        # Add NoLoad as empty if not present
+        cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('NoLoad', 'load', 'POLYGON EMPTY'))
+
+        # Add misc polygons from evaluation cases (custom overrides)
+        eval_cases = data.get('evaluationCases', [])
+        for c in eval_cases:
+            if c.get('custom_dxf'):
+                cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", 
+                               (f"Misc_Case_{c['id']}", 'misc', c['custom_dxf']))
+
+        # 2. Populate sensors
+        sensors = data.get('sensors', [])
+        for s in sensors:
+            cursor.execute("INSERT OR REPLACE INTO sensors VALUES (?, ?, ?, ?, ?, ?, ?)",
+                           (s.get('name', 'Unknown'), 
+                            float(s.get('x', 0)), float(s.get('y', 0)), 
+                            float(s.get('mount', 0)), float(s.get('fov', 270)), 
+                            float(s.get('r', 10)), float(s.get('dia', 150))/1000.0))
+
+        # 3. Populate physics_params
+        physics = data.get('physics', {})
+        # Use first available load group or NoLoad
+        active_p = physics.get('NoLoad', physics.get('Load1', physics.get('Load2', {})))
+        for k, v in active_p.items():
+            cursor.execute("INSERT OR REPLACE INTO physics_params VALUES (?, ?)", (str(k), str(v)))
+
+        # 4. Populate evaluation_matrix
+        for c in eval_cases:
+            cursor.execute("INSERT OR REPLACE INTO evaluation_matrix VALUES (?, ?, ?, ?, ?)",
+                           (int(c['id']), c.get('load', 'NoLoad'), 
+                            float(c.get('v', 0)), float(c.get('w', 0)), int(c['id'])))
+
+        conn.commit()
+        conn.close()
+
+        # Send file and cleanup
+        return send_file(temp_db_path, mimetype="application/x-sqlite3", as_attachment=True, download_name="safety_export.db")
+        
+    except Exception as e:
+        import traceback
+        if 'temp_db_path' in locals() and os.path.exists(temp_db_path):
+            os.remove(temp_db_path)
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 if __name__ == '__main__':
