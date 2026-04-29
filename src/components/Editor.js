@@ -115,24 +115,7 @@ const Editor = ({ globals, setActiveTab }) => {
   };
 
   const buildRefVertices = () => {
-    let refs = [];
-    const addLayer = (parsed, layerName) => {
-       parsed.forEach((poly, polyIdx) => {
-          for (let i = 0; i < poly.length; i += 2) {
-             refs.push({
-               x: poly[i], y: poly[i+1],
-               sketchId: `ref-${layerName}-${polyIdx}-${i}`,
-               part: 'point',
-               type: 'reference',
-               snapped: true
-             });
-          }
-       });
-    };
-    if (targetLayer !== 'FootPrint') addLayer(parsedFP, 'FootPrint');
-    if (targetLayer !== 'Load1') addLayer(parsedL1, 'Load1');
-    if (targetLayer !== 'Load2') addLayer(parsedL2, 'Load2');
-    return refs;
+    return [];
   };
   const referenceVertices = buildRefVertices();
 
