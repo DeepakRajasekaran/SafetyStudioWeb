@@ -2,23 +2,34 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install system dependencies necessary for shapely/ezdxf if any
+# Install system dependencies necessary for compilation
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy backend requirements
 COPY requirements.txt .
 
-# Install dependencies and a production WSGI server
+# Install dependencies, Cython and gunicorn
 RUN pip install --no-cache-dir -r requirements.txt
-RUN pip install --no-cache-dir gunicorn
+RUN pip install --no-cache-dir gunicorn cython
 
-# Copy backend source files
+# Copy backend source files and compilation script
 COPY core.py .
 COPY app.py .
 COPY caseExport.py .
+COPY setup.py .
 COPY assets ./assets
+
+# Compile Python files to shared objects (.so)
+RUN python setup.py build_ext --inplace
+
+# Cleanup: Remove original .py, .c files and build artifacts
+# Keep only .so files and assets
+RUN find . -name "*.py" ! -name "requirements.txt" -delete && \
+    find . -name "*.c" -delete && \
+    rm -rf build setup.py
 
 EXPOSE 5000
 
