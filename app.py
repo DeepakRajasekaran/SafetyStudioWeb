@@ -337,16 +337,25 @@ def export_db():
             cursor.execute("CREATE TABLE physics_params (key TEXT PRIMARY KEY, value TEXT)")
             cursor.execute("CREATE TABLE evaluation_matrix (case_id INTEGER PRIMARY KEY, load_name TEXT, v_max REAL, w_max REAL, hardware_field_id INTEGER)")
 
+        # Clear any dummy data from the template
+        cursor.execute("DELETE FROM geometries")
+        cursor.execute("DELETE FROM sensors")
+        cursor.execute("DELETE FROM evaluation_matrix")
+        cursor.execute("DELETE FROM physics_params")
+
         # 1. Populate geometries
         geom = data.get('geometry', {})
         if geom.get('FootPrint'):
             cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('footprint', 'footprint', geom['FootPrint']))
-        if geom.get('Load1'):
-            cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('Load1', 'load', geom['Load1']))
-        if geom.get('Load2'):
-            cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('Load2', 'load', geom['Load2']))
         
-        # Add NoLoad as empty if not present
+        # Handle Load1 and Load2: Use provided WKT or default to EMPTY
+        load1_wkt = geom.get('Load1') or 'POLYGON EMPTY'
+        cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('Load1', 'load', load1_wkt))
+        
+        load2_wkt = geom.get('Load2') or 'POLYGON EMPTY'
+        cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('Load2', 'load', load2_wkt))
+        
+        # NoLoad is always empty
         cursor.execute("INSERT OR REPLACE INTO geometries VALUES (?, ?, ?)", ('NoLoad', 'load', 'POLYGON EMPTY'))
 
         # Add misc polygons from evaluation cases (custom overrides)
