@@ -179,7 +179,8 @@ const Results = ({ globals }) => {
   const handleClearSketch = () => {
     if (confirm("Are you sure you want to clear all CAD sketches and constraints?")) {
       pushToHistory();
-      setDraftCad(prev => ({ ...prev, sketches: [], constraints: [], dimensions: [], fixedPoints: [] }));
+      if (isEditMode) setDraftCad(prev => ({ ...prev, sketches: [], constraints: [], dimensions: [], fixedPoints: [] }));
+      if (isEditingMask) setMaskCad(prev => ({ ...prev, sketches: [], constraints: [], dimensions: [], fixedPoints: [] }));
     }
   };
 
@@ -277,17 +278,25 @@ const Results = ({ globals }) => {
 
   // --- Live Boolean Preview (union/subtract sketches onto the existing composite field) ---
   useEffect(() => {
-    if (!isEditMode || resultsMode !== 'cad' || !draftCad) {
+    const active = isEditMode || isEditingMask;
+    if (!active || resultsMode !== 'cad') {
       setPreviewFieldWkt(null);
       return;
     }
-    const baseWkt = currentResult?.final_field_wkt;
-    if (!baseWkt && (!draftCad.sketches || draftCad.sketches.length === 0)) {
+    const activeCad = isEditMode ? draftCad : maskCad;
+    if (!activeCad) {
       setPreviewFieldWkt(null);
       return;
     }
 
-    const { wkt: sketchWkt, error } = sketchesToWkt(draftCad.sketches, SCALE_M);
+    const baseWkt = isEditMode ? currentResult?.final_field_wkt : currentResult?.ignored_wkt;
+    
+    if (!baseWkt && (!activeCad.sketches || activeCad.sketches.length === 0)) {
+      setPreviewFieldWkt(null);
+      return;
+    }
+
+    const { wkt: sketchWkt, error } = sketchesToWkt(activeCad.sketches || [], SCALE_M);
     if (error || !sketchWkt) {
       // No valid sketch drawn yet — show base as-is
       setPreviewFieldWkt(baseWkt || null);
@@ -295,30 +304,30 @@ const Results = ({ globals }) => {
     }
 
     // Convert WKT strings to polygon-clipping MultiPolygon format [ Polygon, ... ]
-    // where Polygon is [ [ [x,y],... ], ... ] (exterior ring, then interior rings/holes)
     const wktToRings = (wktStr) => {
       if (!wktStr) return null;
-      const geojson = parse(wktStr);
-      if (!geojson) return null;
+      try {
+        const geojson = parse(wktStr);
+        if (!geojson) return null;
 
-      const results = [];
-      const processPolygon = (poly) => {
-        if (!Array.isArray(poly)) return;
-        results.push(poly.map(ring => {
-          return ring.map(pt => [pt[0], pt[1]]);
-        }));
-      };
+        const results = [];
+        const processPolygon = (poly) => {
+          if (!Array.isArray(poly)) return;
+          results.push(poly.map(ring => {
+            return ring.map(pt => [pt[0], pt[1]]);
+          }));
+        };
 
-      if (geojson.type === 'Polygon' && geojson.coordinates) {
-        processPolygon(geojson.coordinates);
-      } else if (geojson.type === 'MultiPolygon' && geojson.coordinates) {
-        geojson.coordinates.forEach(processPolygon);
-      }
-      return results;
+        if (geojson.type === 'Polygon' && geojson.coordinates) {
+          processPolygon(geojson.coordinates);
+        } else if (geojson.type === 'MultiPolygon' && geojson.coordinates) {
+          geojson.coordinates.forEach(processPolygon);
+        }
+        return results;
+      } catch(e) { return null; }
     };
 
-    // Convert the sketch WKT into additive + subtractive shapes
-    const activeSketches = draftCad.sketches.filter(s => !s.construction);
+    const activeSketches = (activeCad.sketches || []).filter(s => !s.construction);
     const hasSubtract = activeSketches.some(s => s.op === 'subtract');
     const hasUnion = activeSketches.some(s => s.op !== 'subtract');
 
@@ -368,7 +377,8 @@ const Results = ({ globals }) => {
       console.warn('Preview boolean failed:', err);
       setPreviewFieldWkt(baseWkt || null);
     }
-  }, [draftCad, isEditMode, resultsMode, selectedCaseId, currentResult]);
+  }, [draftCad, maskCad, isEditMode, isEditingMask, resultsMode, selectedCaseId, currentResult]);
+
 
   const buildPayload = (k) => {
     if (!k) return null;
@@ -841,30 +851,26 @@ const Results = ({ globals }) => {
 
         <div style={{ flex: 1 }} />
 
-        {/* Edit Mask button — only in Composite view when a result exists */}
-        {viewMode === 'Composite' && currentResult?.ignored_wkt && !isEditMode && (
+        {/* Edit Mask button — only in Composite view */}
+        {viewMode === 'Composite' && currentResult && !isEditMode && (
           <button
             onClick={() => {
               if (!isEditingMask) {
                 originalMaskWkt.current = currentResult.ignored_wkt;
+                setMaskCad({ sketches: [], dimensions: [], fixedPoints: [], constraints: [] });
                 setIsEditingMask(true);
                 setIsEditMode(false);
               } else {
-                if (resultsMode === 'cad' && maskCad?.sketches?.length) {
-                  const { wkt, error } = sketchesToWkt(maskCad.sketches, SCALE_M);
-                  if (error) {
-                    alert(`⚠️ Mask CAD Error:\n\n${error}`);
-                    return;
-                  }
-                  if (wkt) {
-                    setResults(prev => {
-                      const updated = { ...prev };
-                      Object.keys(updated).forEach(id => {
-                        if (updated[id]) updated[id] = { ...updated[id], ignored_wkt: wkt };
-                      });
-                      return updated;
+                if (resultsMode === 'cad' && previewFieldWkt) {
+                  setResults(prev => {
+                    const updated = { ...prev };
+                    Object.keys(updated).forEach(id => {
+                      if (updated[id]) updated[id] = { ...updated[id], ignored_wkt: previewFieldWkt };
                     });
-                  }
+                    return updated;
+                  });
+                  // Clear mask sketches after baking them into the ignored_wkt
+                  setMaskCad(null);
                 }
                 originalMaskWkt.current = null;
                 setIsEditingMask(false);
