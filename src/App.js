@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   HouseLine, 
-  PencilLine, 
+  PencilSimpleLine, 
   Polygon, 
   Download, 
   Cpu, 
@@ -241,7 +241,7 @@ function App() {
 
   const tabs = [
     { id: 'Home', icon: HouseLine, label: 'Home' },
-    { id: 'Editor', icon: PencilLine, label: 'CAD Editor' },
+    { id: 'Editor', icon: PencilSimpleLine, label: 'CAD Editor' },
     { id: 'Results', icon: Polygon, label: 'Results & Solver' },
     { id: 'Hardware', icon: Download, label: 'Hardware Config' },
     { id: 'Help', icon: Question, label: 'Documentation' },

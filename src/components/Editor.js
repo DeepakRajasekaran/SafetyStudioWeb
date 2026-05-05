@@ -30,6 +30,7 @@ import GridCanvas, { SCALE_M } from './GridCanvas';
 import LidarMarker from './LidarMarker';
 import CADSketcher from './CADSketcher';
 import ConstraintList from './ConstraintList';
+import CADToolbar from './CADToolbar';
 import { sketchesToWkt } from '../utils/cadToWkt';
 
 const Editor = ({ globals, setActiveTab }) => {
@@ -174,82 +175,32 @@ const Editor = ({ globals, setActiveTab }) => {
         </div>
         
         {isSketchingMode && (
-        <div style={{ display: 'flex', gap: 5, background: '#222', padding: '2px 8px', borderRadius: 6, alignItems: 'center' }}>
-          <button onClick={() => setActiveTool('select')} title="Select"
-            style={{ background: activeTool === 'select' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <SelectionPlus size={16} weight="bold" />
-          </button>
-
-          <div style={{ width: 1, height: 16, background: '#333', margin: '0 4px' }} />
-          
-          <button onClick={() => setIsConstructionMode(!isConstructionMode)} title="Toggle Construction Mode"
-            style={{ background: isConstructionMode ? '#5c4d1a' : 'transparent', color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-             <Hammer size={16} weight="bold" />
-          </button>
-          <button onClick={() => setIsSubtractionMode(!isSubtractionMode)} title="Toggle Subtraction Mode (Removal)"
-            style={{ background: isSubtractionMode ? '#5c1a1a' : 'transparent', color: isSubtractionMode ? '#ff5252' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-             <Subtract size={16} weight="fill" />
-          </button>
-          <button onClick={() => setActiveTool('line')} title="Line"
-            style={{ background: activeTool === 'line' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <LineSegment size={16} weight="bold" />
-          </button>
-          <button onClick={() => setActiveTool('rect')} title="Rectangle"
-            style={{ background: activeTool === 'rect' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <Rectangle size={16} weight="bold" />
-          </button>
-          <button onClick={() => setActiveTool('circle')} title="Circle"
-            style={{ background: activeTool === 'circle' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <CircleIcon size={16} weight="bold" />
-          </button>
-          <button onClick={() => setActiveTool('dimension')} title="Dimension"
-            style={{ background: activeTool === 'dimension' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <Ruler size={16} weight="bold" />
-          </button>
-          
-          <div style={{ width: 1, height: 16, background: '#444', margin: '0 2px' }} />
-
-          <button onClick={undo} title="Undo (Ctrl+Z)"
-            style={{ background: 'transparent', color: '#aaa', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <ArrowUUpLeft size={16} weight="bold" />
-          </button>
-          <button onClick={handleClearSketch} title="Clear All Sketch"
-            style={{ background: 'transparent', color: '#ff5252', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-            <Trash size={16} weight="bold" />
-          </button>
-          
-          <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
-
-          <div style={{ display: 'flex', gap: 2 }}>
-              {[
-                ['coincide', GpsFix], ['equal', Equals], ['vertical', ArrowUp], 
-                ['horizontal', ArrowRight], ['parallel', Rows], ['perpendicular', VectorTwo], ['anchor', Anchor]
-              ].map(([t, Icon]) => (
-                <button key={t} onClick={() => setActiveTool(t)} title={t.charAt(0).toUpperCase() + t.slice(1)}
-                  style={{ background: activeTool === t ? '#1a4a25' : 'transparent', color: '#00e5ff', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
-                  <Icon size={16} weight={t === 'coincide' ? "fill" : "bold"} />
-                </button>
-             ))}
-          </div>
-
-          <div style={{ width: 1, height: 16, background: '#333', margin: '0 4px' }} />
-
-          <button onClick={() => {
-            const { wkt, error } = sketchesToWkt(targetSketches, SCALE_M);
-            if (error) {
-              alert(`⚠️ Finalize Rejected:\n\n${error}`);
-              return;
-            }
-            if (wkt) {
-              setGeometry(prev => ({ ...prev, [targetLayer]: wkt }));
-              setIsSketchingMode(false);
-              setActiveTool('select');
-              alert(`✓ Sketch applied to ${targetLayer}!`);
-            }
-          }} style={{ background: '#1a4a25', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
-            Finalize
-          </button>
-        </div>
+          <CADToolbar
+            activeTool={activeTool}
+            setActiveTool={setActiveTool}
+            isConstructionMode={isConstructionMode}
+            setIsConstructionMode={setIsConstructionMode}
+            isSubtractionMode={isSubtractionMode}
+            setIsSubtractionMode={setIsSubtractionMode}
+            undo={undo}
+            handleClearSketch={handleClearSketch}
+          >
+            <button onClick={() => {
+              const { wkt, error } = sketchesToWkt(targetSketches, SCALE_M);
+              if (error) {
+                alert(`⚠️ Finalize Rejected:\n\n${error}`);
+                return;
+              }
+              if (wkt) {
+                setGeometry(prev => ({ ...prev, [targetLayer]: wkt }));
+                setIsSketchingMode(false);
+                setActiveTool('select');
+                alert(`✓ Sketch applied to ${targetLayer}!`);
+              }
+            }} style={{ background: '#1a4a25', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
+              Finalize
+            </button>
+          </CADToolbar>
         )}
       </div>
 
