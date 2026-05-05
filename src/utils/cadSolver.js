@@ -192,10 +192,16 @@ function solveIteration(particles, constraints, dimensions, sketches) {
       const d2 = dx * dx + dy * dy;
       residual += d2;
       if (d2 < TOLERANCE * TOLERANCE) return;
-      // Move both toward midpoint, respecting fixedness
-      const mx = (r1.x + r2.x) / 2, my = (r1.y + r2.y) / 2;
-      if (!r1.fixed) applyDelta(particles, r1, mx - r1.x, my - r1.y);
-      if (!r2.fixed) applyDelta(particles, r2, mx - r2.x, my - r2.y);
+      
+      if (!r1.fixed && !r2.fixed) {
+        const mx = (r1.x + r2.x) / 2, my = (r1.y + r2.y) / 2;
+        applyDelta(particles, r1, mx - r1.x, my - r1.y);
+        applyDelta(particles, r2, mx - r2.x, my - r2.y);
+      } else if (r1.fixed && !r2.fixed) {
+        applyDelta(particles, r2, r1.x - r2.x, r1.y - r2.y);
+      } else if (r2.fixed && !r1.fixed) {
+        applyDelta(particles, r1, r2.x - r1.x, r2.y - r1.y);
+      }
     }
 
     else if (type === 'horizontal') {
@@ -206,8 +212,15 @@ function solveIteration(particles, constraints, dimensions, sketches) {
         const targetY = (r1.y + r2.y) / 2;
         const dy1 = targetY - r1.y, dy2 = targetY - r2.y;
         residual += dy1 * dy1 + dy2 * dy2;
-        if (!r1.fixed) applyDelta(particles, r1, 0, dy1);
-        if (!r2.fixed) applyDelta(particles, r2, 0, dy2);
+        
+        if (!r1.fixed && !r2.fixed) {
+          applyDelta(particles, r1, 0, dy1);
+          applyDelta(particles, r2, 0, dy2);
+        } else if (r1.fixed && !r2.fixed) {
+          applyDelta(particles, r2, 0, r1.y - r2.y);
+        } else if (r2.fixed && !r1.fixed) {
+          applyDelta(particles, r1, 0, r2.y - r1.y);
+        }
       } else {
         // Single point or edge horizontal
         const r1 = res(v1);
@@ -225,8 +238,14 @@ function solveIteration(particles, constraints, dimensions, sketches) {
             const targetY = (p1.y + p2.y) / 2;
             const dy1 = targetY - p1.y, dy2 = targetY - p2.y;
             residual += dy1 * dy1 + dy2 * dy2;
-            if (!p1.fixed) p1.y += dy1 * STEP;
-            if (!p2.fixed) p2.y += dy2 * STEP;
+            if (!p1.fixed && !p2.fixed) {
+              p1.y += dy1 * STEP;
+              p2.y += dy2 * STEP;
+            } else if (p1.fixed && !p2.fixed) {
+              p2.y += (p1.y - p2.y) * STEP;
+            } else if (p2.fixed && !p1.fixed) {
+              p1.y += (p2.y - p1.y) * STEP;
+            }
           }
         }
       }
@@ -240,8 +259,14 @@ function solveIteration(particles, constraints, dimensions, sketches) {
         const targetX = (r1.x + r2.x) / 2;
         const dx1 = targetX - r1.x, dx2 = targetX - r2.x;
         residual += dx1 * dx1 + dx2 * dx2;
-        if (!r1.fixed) applyDelta(particles, r1, dx1, 0);
-        if (!r2.fixed) applyDelta(particles, r2, dx2, 0);
+        if (!r1.fixed && !r2.fixed) {
+          applyDelta(particles, r1, dx1, 0);
+          applyDelta(particles, r2, dx2, 0);
+        } else if (r1.fixed && !r2.fixed) {
+          applyDelta(particles, r2, r1.x - r2.x, 0);
+        } else if (r2.fixed && !r1.fixed) {
+          applyDelta(particles, r1, r2.x - r1.x, 0);
+        }
       } else {
         // Single target vertical
         const r1 = res(v1);
@@ -254,8 +279,14 @@ function solveIteration(particles, constraints, dimensions, sketches) {
             const targetX = (p1.x + p2.x) / 2;
             const dx1 = targetX - p1.x, dx2 = targetX - p2.x;
             residual += dx1 * dx1 + dx2 * dx2;
-            if (!p1.fixed) p1.x += dx1 * STEP;
-            if (!p2.fixed) p2.x += dx2 * STEP;
+            if (!p1.fixed && !p2.fixed) {
+              p1.x += dx1 * STEP;
+              p2.x += dx2 * STEP;
+            } else if (p1.fixed && !p2.fixed) {
+              p2.x += (p1.x - p2.x) * STEP;
+            } else if (p2.fixed && !p1.fixed) {
+              p1.x += (p2.x - p1.x) * STEP;
+            }
           }
         }
       }
@@ -447,6 +478,35 @@ export const propagateConstraints = (sketches, constraints, dimensions, fixedPoi
   const stampedDims = (dimensions || []).map(d => ({ ...d, _scale: SCALE_M }));
 
   const particles = extractParticles(sketches, fixedPoints || []);
+
+  // Pre-solve: Propagate "fixed" status across coincident constraints
+  // If A is fixed and B is coincident with A, then B should act as fixed.
+  let changed = true;
+  let loops = 0;
+  while (changed && loops < 10) {
+    changed = false;
+    loops++;
+    (constraints || []).forEach(c => {
+      if (c.type === 'coincident' || c.type === 'coincide') {
+        const r1 = resolvePosition(particles, c.v1, sketches);
+        const r2 = resolvePosition(particles, c.v2, sketches);
+        if (!r1 || !r2) return;
+        
+        // We only propagate fixedness to real particles, not virtual midpoints
+        if (r1.fixed && !r2.fixed && !r2.virtual) {
+          particles[r2.pid].x = r1.x;
+          particles[r2.pid].y = r1.y;
+          particles[r2.pid].fixed = true;
+          changed = true;
+        } else if (r2.fixed && !r1.fixed && !r1.virtual) {
+          particles[r1.pid].x = r2.x;
+          particles[r1.pid].y = r2.y;
+          particles[r1.pid].fixed = true;
+          changed = true;
+        }
+      }
+    });
+  }
 
   // Check infeasibility upfront: two coincident targets both fixed at different positions
   const infeasibleReasons = [];

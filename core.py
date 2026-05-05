@@ -155,49 +155,8 @@ class SafetyMath:
             keep_indices.append(i)
             
         pts = [pts[i] for i in keep_indices]
-        n = len(pts)
-        if n < 5: return Polygon(pts)
-        radii = np.array([math.hypot(p[0], p[1]) for p in pts])
-        
-        max_idx = np.argmax(radii)
-        pts = pts[max_idx:] + pts[:max_idx]
-        radii = np.roll(radii, -max_idx)
-        
-        thresh = min_r + (max_r - min_r) * 0.4
-        inner_indices = [i for i, r in enumerate(radii) if r < thresh]
-        if not inner_indices: return Polygon(pts)
-        
-        segments = []; curr = [inner_indices[0]]
-        for x in inner_indices[1:]:
-            if x == curr[-1] + 1: curr.append(x)
-            else: segments.append(curr); curr = [x]
-        segments.append(curr)
-        inner_seg = max(segments, key=len)
-        
-        seg_radii = radii[inner_seg]
-        base_r = np.min(seg_radii)
-        notch_thresh = base_r * 1.2
-        bad_sub = [i for i in range(len(inner_seg)) if seg_radii[i] > notch_thresh]
-        
-        if bad_sub and bad_sub[0] > 0 and bad_sub[-1] < len(inner_seg) - 1:
-            first_bad = inner_seg[bad_sub[0]]
-            last_bad = inner_seg[bad_sub[-1]]
-            idx_start = first_bad - 1
-            idx_end = last_bad + 1
-            if idx_start >= 0 and idx_end < len(pts):
-                p_s = pts[idx_start]; p_e = pts[idx_end]
-                r_fit = (math.hypot(p_s[0], p_s[1]) + math.hypot(p_e[0], p_e[1])) / 2.0
-                a_s = math.atan2(p_s[1], p_s[0]); a_e = math.atan2(p_e[1], p_e[0])
-                diff = a_e - a_s
-                if diff < -math.pi: diff += 2*math.pi
-                if diff > math.pi: diff -= 2*math.pi
-                steps = int(abs(diff) * r_fit / 0.05) + 1
-                new_arc = []
-                for s in range(steps + 1):
-                    t = s / steps; ang = a_s + diff * t
-                    new_arc.append((r_fit*math.cos(ang), r_fit*math.sin(ang)))
-                pts = pts[:idx_start] + new_arc + pts[idx_end+1:]
-        return Polygon(pts)
+        if len(pts) < 3: return poly
+        return Polygon(pts, poly.interiors)
 
     @staticmethod
     def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None):

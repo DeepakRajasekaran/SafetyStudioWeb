@@ -11,7 +11,9 @@ import {
   Ruler, 
   DotsSix, 
   Link, 
-  Equals, 
+  Equals,
+  GpsFix,
+  Anchor, 
   ArrowUp, 
   ArrowRight, 
   Rows, 
@@ -791,6 +793,20 @@ const Results = ({ globals }) => {
                <Subtract size={16} weight="fill" />
             </button>
             <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
+            
+            <div style={{ display: 'flex', gap: 2 }}>
+              {[
+                ['coincide', GpsFix], ['equal', Equals], ['vertical', ArrowUp], 
+                ['horizontal', ArrowRight], ['parallel', Rows], ['perpendicular', VectorTwo], ['anchor', Anchor]
+              ].map(([t, Icon]) => (
+                <button key={t} onClick={() => setActiveTool(t)} title={t.charAt(0).toUpperCase() + t.slice(1)}
+                  style={{ background: activeTool === t ? '#1a4a25' : 'transparent', color: '#00e5ff', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}>
+                  <Icon size={16} weight={t === 'coincide' ? "fill" : "bold"} />
+                </button>
+             ))}
+            </div>
+
+            <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
             <button 
               onClick={isEditMode && resultsMode === 'cad' ? handleCadUndo : undo} 
               style={{ background: 'transparent', color: '#666', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }} 
@@ -836,7 +852,7 @@ const Results = ({ globals }) => {
         <div style={{ flex: 1 }} />
 
         {/* Edit Mask button — only in Composite view when a result exists */}
-        {viewMode === 'Composite' && currentResult?.ignored_wkt && (
+        {viewMode === 'Composite' && currentResult?.ignored_wkt && !isEditMode && (
           <button
             onClick={() => {
               if (!isEditingMask) {
@@ -884,17 +900,21 @@ const Results = ({ globals }) => {
           </button>
         )}
 
-        <button onClick={() => setIsGenOpen(true)} className="toolbar-action-btn" style={{ background: '#581c87', color: '#fff' }}>
-          <Stack size={14} weight="bold" color="#fff" /> EVALUATION
-        </button>
+        {!isEditMode && (
+          <>
+            <button onClick={() => setIsGenOpen(true)} className="toolbar-action-btn" style={{ background: '#581c87', color: '#fff' }}>
+              <Stack size={14} weight="bold" color="#fff" /> EVALUATION
+            </button>
 
-        <button onClick={handleCalculate} disabled={isCalculating} className="toolbar-action-btn info">
-          {isCalculating ? '...' : <><Play size={14} weight="bold" /> CALC</>}
-        </button>
-        
-        <button onClick={handleCalculateAll} disabled={isCalculating} className="toolbar-action-btn success">
-          <Lightning size={14} weight="bold" /> ALL
-        </button>
+            <button onClick={handleCalculate} disabled={isCalculating} className="toolbar-action-btn info">
+              {isCalculating ? '...' : <><Play size={14} weight="bold" /> CALC</>}
+            </button>
+            
+            <button onClick={handleCalculateAll} disabled={isCalculating} className="toolbar-action-btn success">
+              <Lightning size={14} weight="bold" /> ALL
+            </button>
+          </>
+        )}
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
