@@ -434,7 +434,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     if (drawingState.current.startSnap) {
        newConstraints.push({ type: 'coincident', v1: { sketchId: humanId, part: finalized.type === 'rect' ? 'p1' : (finalized.type === 'circle' ? 'center' : 'start') }, v2: drawingState.current.startSnap });
     }
-    const snapMeta = finalPos && finalPos.snapped && finalPos.sketchId ? { sketchId: finalPos.sketchId, part: finalPos.part } : null;
+    const snapMeta = finalPos && finalPos.snapped && finalPos.sketchId ? { sketchId: finalPos.sketchId, part: finalPos.part, type: finalPos.type } : null;
     if (snapMeta) {
        newConstraints.push({ type: 'coincident', v1: { sketchId: humanId, part: finalized.type === 'rect' ? 'p3' : (finalized.type === 'circle' ? 'rad' : 'end') }, v2: snapMeta });
     }
@@ -544,7 +544,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     if (!stage) return;
     const pos = stage.getRelativePointerPosition();
     const snapped = snapPos(pos.x, pos.y);
-    const snapMeta = snapped.snapped && snapped.sketchId ? { sketchId: snapped.sketchId, part: snapped.part } : null;
+    const snapMeta = snapped.snapped && snapped.sketchId ? { sketchId: snapped.sketchId, part: snapped.part, type: snapped.type } : null;
 
     if (activeTool === 'select') {
       if (snapped.snapped && snapped.sketchId && !snapped.sketchId.startsWith('ref-') && snapped.sketchId !== 'origin') {

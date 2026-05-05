@@ -161,12 +161,15 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
 
   try {
     // 1. Union all additive shapes, or initialize empty if none
-    let result = additive.length > 0 ? union(...additive) : [];
+    const hasAdditive = additive.length > 0;
+    let result = hasAdditive ? union(...additive) : [];
 
     // 2. Iteratively subtract removal shapes
     subtractive.forEach(subPoly => {
-      if (result.length > 0) {
-        result = difference(result, subPoly);
+      if (hasAdditive) {
+        if (result.length > 0) {
+          result = difference(result, subPoly);
+        }
       } else {
         // If no additive shapes, the union of subtractive shapes themselves becomes the result
         // This is useful for callers like Results.js that perform their own secondary booleans
