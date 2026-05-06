@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { 
   HouseLine, 
-  PencilLine, 
+  PencilSimpleLine, 
   Polygon, 
   Download, 
   Cpu, 
@@ -31,8 +31,8 @@ function App() {
     sensors: [],
     physics: {
       NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 },
-      Load1:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 },
-      Load2:  { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 }
+      Load1:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 },
+      Load2:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 }
     },
     evaluationCases: [
       { id: 1, load: 'NoLoad', v: 1.0, w: 0.0, type: 'std' },
@@ -43,9 +43,9 @@ function App() {
       { id: 6, load: 'NoLoad', v: 0.0, w: -1.0, type: 'std' }
     ],
     genConfig: {
-      NoLoad: { enabled: true, levels: 5, v: 1.2, w: 0.6, minV: 0.1, revV: 0.3, fwd: true, turn: true, ip: true, rev: false, idle: true },
-      Load1:  { enabled: false, levels: 5, v: 1.0, w: 0.4, minV: 0.1, revV: 0.3, fwd: true, turn: true, ip: true, rev: false, idle: true },
-      Load2:  { enabled: false, levels: 5, v: 0.8, w: 0.3, minV: 0.1, revV: 0.3, fwd: true, turn: true, ip: true, rev: false, idle: true },
+      NoLoad: { enabled: true, levels: 5, v: 1.2, w: 0.6, revV: 0.3, fwd: true, turn: true, ip: true, rev: false, idle: true },
+      Load1:  { enabled: false, levels: 5, v: 1.0, w: 0.4, revV: 0.3, fwd: true, turn: true, ip: true, rev: false, idle: true },
+      Load2:  { enabled: false, levels: 5, v: 0.8, w: 0.3, revV: 0.3, fwd: true, turn: true, ip: true, rev: false, idle: true },
     },
     results: {},
     fieldsets: [],
@@ -241,7 +241,7 @@ function App() {
 
   const tabs = [
     { id: 'Home', icon: HouseLine, label: 'Home' },
-    { id: 'Editor', icon: PencilLine, label: 'CAD Editor' },
+    { id: 'Editor', icon: PencilSimpleLine, label: 'CAD Editor' },
     { id: 'Results', icon: Polygon, label: 'Results & Solver' },
     { id: 'Hardware', icon: Download, label: 'Hardware Config' },
     { id: 'Help', icon: Question, label: 'Documentation' },

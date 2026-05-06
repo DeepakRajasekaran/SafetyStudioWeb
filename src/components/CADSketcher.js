@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Group, Line, Circle, Text, Rect } from 'react-konva';
+import { Group, Line, Circle, Text, Rect, Wedge } from 'react-konva';
 import { applyDimensionUpdate } from '../utils/cadConstraints';
 import { applyConstraint, validateConstraints, isFullyConstrained, propagateConstraints } from '../utils/cadSolver';
 import { vec, isPointSafe } from '../utils/cadMath';
@@ -27,6 +27,14 @@ function resolveCadPoint(s, part) {
     if (part === 'rad') return { x: s.center[0] + s.radius, y: s.center[1] };
     return { x: s.center[0], y: s.center[1] };
   }
+  if (s.type === 'sector') {
+    if (part === 'center') return { x: s.center[0], y: s.center[1] };
+    if (part === 'start') return { x: s.center[0] + s.radius * Math.cos(s.startAngle), y: s.center[1] + s.radius * Math.sin(s.startAngle) };
+    if (part === 'end') return { x: s.center[0] + s.radius * Math.cos(s.startAngle + s.sweepAngle), y: s.center[1] + s.radius * Math.sin(s.startAngle + s.sweepAngle) };
+    if (part === 'mid_arc') return { x: s.center[0] + s.radius * Math.cos(s.startAngle + s.sweepAngle/2), y: s.center[1] + s.radius * Math.sin(s.startAngle + s.sweepAngle/2) };
+    if (part === 'rad') return { x: s.center[0] + s.radius * Math.cos(s.startAngle), y: s.center[1] + s.radius * Math.sin(s.startAngle) }; // fallback for radius dim
+    return { x: s.center[0], y: s.center[1] };
+  }
   if (s.type === 'rect') {
     const [x1, y1] = s.start;
     const [x2, y2] = s.end;
@@ -41,6 +49,93 @@ function resolveCadPoint(s, part) {
     if (part === 'mid_right') return { x: x2, y: (y1 + y2) / 2 };
   }
   return { x: 0, y: 0 };
+}
+
+/**
+/**
+ * Arc-based Angle Annotation — draws an arc between two vectors with a degree label.
+ */
+function AngleAnnotation({ cx, cy, r1x, r1y, r2x, r2y, label, scale, onClick }) {
+  const safeScale = scale && scale > 0 ? scale : 1;
+  const a1 = Math.atan2(r1y - cy, r1x - cx);
+  const a2 = Math.atan2(r2y - cy, r2x - cx);
+  const arcR = 32 / safeScale;
+  
+  // Build arc path
+  let sweep = a2 - a1;
+  if (sweep < 0) sweep += 2 * Math.PI;
+  if (sweep > Math.PI) { sweep = 2 * Math.PI - sweep; }
+  
+  const midAng = a1 + sweep / 2;
+  const arcStartX = cx + arcR * Math.cos(a1);
+  const arcStartY = cy + arcR * Math.sin(a1);
+  const arcEndX = cx + arcR * Math.cos(a2);
+  const arcEndY = cy + arcR * Math.sin(a2);
+  const largeArc = sweep > Math.PI ? 1 : 0;
+  
+  const textX = cx + (arcR + 14 / safeScale) * Math.cos(midAng);
+  const textY = cy + (arcR + 14 / safeScale) * Math.sin(midAng);
+  
+  const arrowSize = 5 / safeScale;
+  const tangA2x = -Math.sin(a2);
+  const tangA2y = Math.cos(a2);
+  
+  return (
+    <Group>
+      <Line
+        points={[
+          cx + (arcR - 5/safeScale) * Math.cos(a1), cy + (arcR - 5/safeScale) * Math.sin(a1),
+          arcStartX, arcStartY
+        ]}
+        stroke="#666" strokeWidth={1/safeScale} listening={false}
+      />
+      <Line
+        points={[
+          cx + (arcR - 5/safeScale) * Math.cos(a2), cy + (arcR - 5/safeScale) * Math.sin(a2),
+          arcEndX, arcEndY
+        ]}
+        stroke="#666" strokeWidth={1/safeScale} listening={false}
+      />
+      {/* Arc drawn as a Konva Arc */}
+      <Line
+        points={[arcStartX, arcStartY, arcEndX, arcEndY]}
+        stroke="rgba(255,255,255,0)"
+        strokeWidth={0}
+        listening={false}
+      />
+      {/* Approximate arc with short line segments */}
+      {Array.from({ length: 21 }, (_, k) => {
+        const t0 = a1 + (k / 20) * sweep;
+        const t1 = a1 + ((k + 1) / 20) * sweep;
+        return (
+          <Line
+            key={k}
+            points={[cx + arcR * Math.cos(t0), cy + arcR * Math.sin(t0), cx + arcR * Math.cos(t1), cy + arcR * Math.sin(t1)]}
+            stroke="white" strokeWidth={1.5 / safeScale} listening={false}
+          />
+        );
+      })}
+      {/* Arrow at arc end */}
+      <Line
+        points={[arcEndX, arcEndY, arcEndX + tangA2x * arrowSize - (arcEndX - cx) / arcR * arrowSize * 0.4, arcEndY + tangA2y * arrowSize - (arcEndY - cy) / arcR * arrowSize * 0.4,
+                arcEndX + tangA2x * arrowSize + (arcEndX - cx) / arcR * arrowSize * 0.4, arcEndY + tangA2y * arrowSize + (arcEndY - cy) / arcR * arrowSize * 0.4]}
+        fill="white" closed stroke="white" strokeWidth={0.5/safeScale} listening={false}
+      />
+      <Text
+        x={textX} y={textY}
+        text={label + '°'}
+        fill="#00e5ff"
+        fontSize={11 / safeScale}
+        align="center"
+        offsetX={(label.length * 3.5 + 8) / safeScale}
+        offsetY={6 / safeScale}
+        onClick={onClick}
+        onTap={onClick}
+        onMouseEnter={e => { e.target.getStage().container().style.cursor = 'pointer'; }}
+        onMouseLeave={e => { e.target.getStage().container().style.cursor = 'default'; }}
+      />
+    </Group>
+  );
 }
 
 /**
@@ -117,15 +212,14 @@ function Annotation({ x1, y1, x2, y2, label, scale, tolerance = '', symbol = '',
   );
 }
 
-function DimOverlay({ x, y, value, tolerance, onCommit, onCancel }) {
+function DimOverlay({ x, y, value, onCommit, onCancel }) {
   const [val, setVal] = useState(value);
-  const [tol, setTol] = useState(tolerance.replace('±', ''));
   const ref = useRef(null);
 
   useEffect(() => { ref.current?.focus(); }, []);
 
   const handleKey = (e) => {
-    if (e.key === 'Enter') onCommit(val, tol);
+    if (e.key === 'Enter') onCommit(val, '0');
     if (e.key === 'Escape') onCancel();
   };
 
@@ -140,12 +234,6 @@ function DimOverlay({ x, y, value, tolerance, onCommit, onCancel }) {
         onBlur={e => { if (e.target.value === '') setVal('0'); }}
         onKeyDown={handleKey} 
         style={{ background: '#000', color: '#00e5ff', border: '1px solid #333', padding: '4px', width: '60px', outline: 'none' }} />
-      <div style={{ color: '#888' }}>±</div>
-      <input type="text" value={tol} 
-        onChange={e => setTol(e.target.value)} 
-        onBlur={e => { if (e.target.value === '') setTol('0'); }}
-        onKeyDown={handleKey} 
-        style={{ background: '#000', color: '#ff9800', border: '1px solid #333', padding: '4px', width: '40px', outline: 'none' }} />
     </div>
   );
 }
@@ -171,6 +259,13 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
   useEffect(() => { constraintsRef.current = constraints; }, [constraints]);
   useEffect(() => { dimensionsRef.current  = dimensions;  }, [dimensions]);
   useEffect(() => { fixedPointsRef.current = fixedPoints; }, [fixedPoints]);
+
+  // Clear overlay when CADSketcher unmounts (e.g. exiting editor)
+  useEffect(() => {
+    return () => {
+      if (setOverlay) setOverlay(null);
+    };
+  }, [setOverlay]);
 
   // Force Konva redraw when state changes
   useEffect(() => {
@@ -310,6 +405,15 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
       if (e.key === 'Delete' || e.key === 'Backspace') {
         deleteSelected();
       }
+      if (e.key === 'Escape') {
+        if (drawingState.current.step !== 0 || selectionBox) {
+          drawingState.current = { step: 0, isDragging: false, startPos: null, lastClickTime: 0 };
+          setNewShape(null);
+          setSelectionBox(null);
+        }
+        setDimSelection([]);
+        setConstraintSelection([]);
+      }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -327,6 +431,11 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
         const center = resolveCadPoint(s, 'center');
         v.push({ ...center, sketchId: s.id, part: 'center' });
         v.push({ ...resolveCadPoint(s, 'rad'), sketchId: s.id, part: 'rad' });
+      } else if (s.type === 'sector') {
+        v.push({ ...resolveCadPoint(s, 'center'), sketchId: s.id, part: 'center' });
+        v.push({ ...resolveCadPoint(s, 'start'), sketchId: s.id, part: 'start' });
+        v.push({ ...resolveCadPoint(s, 'end'), sketchId: s.id, part: 'end' });
+        v.push({ ...resolveCadPoint(s, 'mid_arc'), sketchId: s.id, part: 'mid_arc' });
       } else if (s.type === 'rect') {
         ['p1', 'p2', 'p3', 'p4', 'mid_top', 'mid_bottom', 'mid_left', 'mid_right', 'center'].forEach(p => v.push({ ...resolveCadPoint(s, p), sketchId: s.id, part: p }));
       }
@@ -359,6 +468,24 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
           const p = { x: c.x + (rawX - c.x) * ratio, y: c.y + (rawY - c.y) * ratio };
           const distToEdge = Math.abs(d - s.radius);
           if (distToEdge < minDist) { minDist = distToEdge; best = { ...p, snapped: true, sketchId: s.id, type: 'edge' }; }
+        }
+      } else if (s.type === 'sector') {
+        const c = { x: s.center[0], y: s.center[1] };
+        const p1 = { x: c.x + s.radius * Math.cos(s.startAngle), y: c.y + s.radius * Math.sin(s.startAngle) };
+        const p2 = { x: c.x + s.radius * Math.cos(s.startAngle + s.sweepAngle), y: c.y + s.radius * Math.sin(s.startAngle + s.sweepAngle) };
+        
+        const proj1 = vec.project({x: rawX, y: rawY}, c, p1);
+        const d1 = vec.dist(proj1, {x: rawX, y: rawY});
+        if (d1 < minDist) { 
+          minDist = d1; 
+          best = { ...proj1, snapped: true, sketchId: s.id, type: 'edge', line: { id: s.id, type: 'line', points: [c.x, c.y, p1.x, p1.y], part1: 'center', part2: 'start' } }; 
+        }
+        
+        const proj2 = vec.project({x: rawX, y: rawY}, c, p2);
+        const d2 = vec.dist(proj2, {x: rawX, y: rawY});
+        if (d2 < minDist) { 
+          minDist = d2; 
+          best = { ...proj2, snapped: true, sketchId: s.id, type: 'edge', line: { id: s.id, type: 'line', points: [c.x, c.y, p2.x, p2.y], part1: 'center', part2: 'end' } }; 
         }
       }
     });
@@ -427,15 +554,21 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     pushToHistory();
 
     const typeCount = sketchesRef.current.filter(s => s.type === finalized.type).length + 1;
-    const typeLabels = { line: 'Line', circle: 'Circle', rect: 'Rect' };
+    const typeLabels = { line: 'Line', circle: 'Circle', rect: 'Rect', sector: 'Sector' };
     const humanId = `${typeLabels[finalized.type] || 'Shape'} ${typeCount}`;
 
     let newConstraints = [...constraintsRef.current];
-    if (drawingState.current.startSnap) {
+    if (finalized.type !== 'sector' && drawingState.current.startSnap) {
+       // For non-sectors, snap the start/p1/center to what the user clicked on
        newConstraints.push({ type: 'coincident', v1: { sketchId: humanId, part: finalized.type === 'rect' ? 'p1' : (finalized.type === 'circle' ? 'center' : 'start') }, v2: drawingState.current.startSnap });
+    } else if (finalized.type === 'sector' && drawingState.current.startSnap) {
+       // For sectors, the first click was the CENTER — snap center, not start
+       newConstraints.push({ type: 'coincident', v1: { sketchId: humanId, part: 'center' }, v2: drawingState.current.startSnap });
     }
-    const snapMeta = finalPos && finalPos.snapped && finalPos.sketchId ? { sketchId: finalPos.sketchId, part: finalPos.part } : null;
+    const snapMeta = finalPos && finalPos.snapped && finalPos.sketchId && finalized.type !== 'sector'
+      ? { sketchId: finalPos.sketchId, part: finalPos.part, type: finalPos.type } : null;
     if (snapMeta) {
+       // Sector finalPos is just the sweep-end click — not meaningful for snapping
        newConstraints.push({ type: 'coincident', v1: { sketchId: humanId, part: finalized.type === 'rect' ? 'p3' : (finalized.type === 'circle' ? 'rad' : 'end') }, v2: snapMeta });
     }
 
@@ -469,7 +602,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
   }, [activeTool]);
 
   useEffect(() => {
-    const isConstraint = ['coincide', 'coincident', 'equal', 'vertical', 'horizontal', 'parallel', 'perpendicular'].includes(activeTool);
+    const isConstraint = ['coincide', 'coincident', 'equal', 'vertical', 'horizontal', 'parallel', 'perpendicular', 'angle'].includes(activeTool);
     if (!isConstraint || constraintSelection.length === 0) return;
 
     const currentSketches    = sketchesRef.current;
@@ -511,6 +644,67 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     } else if (!isSingleTarget && constraintSelection.length >= 2) {
       const v1 = constraintSelection[0];
       const v2 = constraintSelection[1];
+      
+      if (activeTool === 'angle') {
+        const s1 = currentSketches.find(sk => sk.id === v1.sketchId);
+        const s2 = currentSketches.find(sk => sk.id === v2.sketchId);
+        if (!s1 || !s2 || s1.type !== 'line' || s2.type !== 'line') {
+           alert('Angle constraint requires selecting two lines.');
+           setConstraintSelection([]);
+           return;
+        }
+
+        const sharedCoincide = currentConstraints.some(c => 
+          (c.type === 'coincide' || c.type === 'coincident') &&
+          ((c.v1.sketchId === s1.id && c.v2.sketchId === s2.id) ||
+           (c.v1.sketchId === s2.id && c.v2.sketchId === s1.id))
+        );
+
+        const points1 = [{x: s1.points[0], y: s1.points[1]}, {x: s1.points[2], y: s1.points[3]}];
+        const points2 = [{x: s2.points[0], y: s2.points[1]}, {x: s2.points[2], y: s2.points[3]}];
+        const overlaps = points1.some(p1 => points2.some(p2 => Math.abs(p1.x - p2.x) < 1e-4 && Math.abs(p1.y - p2.y) < 1e-4));
+
+        if (!sharedCoincide && !overlaps) {
+           alert('Angle constraint can only be applied to connected lines. Please add a coincide constraint first.');
+           setConstraintSelection([]);
+           return;
+        }
+
+        const stage = stageGroupRef.current?.getStage();
+        if (stage) {
+           const pAbs = stage.getAbsoluteTransform().point({x: (v1.x+v2.x)/2, y: (v1.y+v2.y)/2});
+           const rect = stage.container().getBoundingClientRect();
+           setConstraintSelection([]);
+           setOverlay({
+             component: DimOverlay,
+             props: {
+               x: rect.left + pAbs.x, y: rect.top + pAbs.y,
+               value: '90', tolerance: '',
+               onCommit: (vStr, tStr) => {
+                  setOverlay(null);
+                  const angleVal = parseFloat(vStr);
+                  if (isNaN(angleVal)) return;
+                  const newConstraint = { type: 'angle', v1, v2, value: angleVal, id: Date.now() };
+                  pushToHistory();
+                  const allConstraints = [...currentConstraints, newConstraint];
+                  const solveResult = runSolver(currentSketches, allConstraints, currentDimensions, currentFixed, SCALE_M, referenceVertices);
+                  if (solveResult.error) {
+                    alert('⚠️ Constraint Error:\n\n' + solveResult.error);
+                  } else {
+                    setSketches(solveResult.sketches);
+                    if (setConstraints) setConstraints(allConstraints);
+                    // Also store as a visible dimension annotation
+                    const angleDim = { id: Date.now() + 1, v1, v2, value: angleVal, label: angleVal.toFixed(1), symbol: '°', isAngle: true };
+                    if (setDimensions) setDimensions(prev => [...prev, angleDim]);
+                  }
+               },
+               onCancel: () => setOverlay(null)
+             }
+           });
+        }
+        return;
+      }
+
       const { sketches: res, newConstraint, error } = applyConstraint(
         currentSketches, activeTool, v1, v2,
         currentFixed, currentDimensions, SCALE_M, referenceVertices, currentConstraints
@@ -544,7 +738,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     if (!stage) return;
     const pos = stage.getRelativePointerPosition();
     const snapped = snapPos(pos.x, pos.y);
-    const snapMeta = snapped.snapped && snapped.sketchId ? { sketchId: snapped.sketchId, part: snapped.part } : null;
+    const snapMeta = snapped.snapped && snapped.sketchId ? { sketchId: snapped.sketchId, part: snapped.part, type: snapped.type } : null;
 
     if (activeTool === 'select') {
       if (snapped.snapped && snapped.sketchId && !snapped.sketchId.startsWith('ref-') && snapped.sketchId !== 'origin') {
@@ -573,55 +767,134 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
 
     if (activeTool === 'dimension') {
       if (dimSelection.length === 0) {
-        if (snapped.type === 'edge') {
-          const s = sketches.find(sk => sk.id === snapped.sketchId);
-          if (!s) return;
-          if (s.type === 'line') {
-            const v1 = { x: s.points[0], y: s.points[1], sketchId: s.id, part: 'start' };
-            const v2 = { x: s.points[2], y: s.points[3], sketchId: s.id, part: 'end' };
-            const pAbs = stage.getAbsoluteTransform().point({x: (v1.x+v2.x)/2, y: (v1.y+v2.y)/2});
-            const rect = stage.container().getBoundingClientRect();
-            setOverlay({ 
-              component: DimOverlay, 
-              props: { 
-                x: rect.left + pAbs.x, y: rect.top + pAbs.y, 
-                value: (vec.dist(v1, v2)/SCALE_M).toFixed(3), tolerance: '',
-                onCommit: (vStr, tStr) => commitDim(v1, v2, vStr, tStr)
-              } 
-            });
-          } else if (s.type === 'circle') {
-            const v1 = { x: s.center[0], y: s.center[1], sketchId: s.id, part: 'center' };
-            const v2 = { x: s.center[0] + s.radius, y: s.center[1], sketchId: s.id, part: 'rad' };
-            const pAbs = stage.getAbsoluteTransform().point(v2);
-            const rect = stage.container().getBoundingClientRect();
-            setOverlay({ 
-              component: DimOverlay, 
-              props: { 
-                x: rect.left + pAbs.x, y: rect.top + pAbs.y, 
-                value: (s.radius/SCALE_M).toFixed(3), tolerance: '',
-                onCommit: (vStr, tStr) => commitDim(v1, v2, vStr, tStr, '⌀ ')
-              } 
-            });
+        if (snapped.snapped) {
+          if (snapped.type === 'edge') {
+            const s = sketches.find(sk => sk.id === snapped.sketchId);
+            if (!s) return;
+            if (s.type === 'circle') {
+              const v1 = { x: s.center[0], y: s.center[1], sketchId: s.id, part: 'center' };
+              const v2 = { x: s.center[0] + s.radius, y: s.center[1], sketchId: s.id, part: 'rad' };
+              const pAbs = stage.getAbsoluteTransform().point(v2);
+              const rect = stage.container().getBoundingClientRect();
+              setOverlay({ 
+                component: DimOverlay, 
+                props: { 
+                  x: rect.left + pAbs.x, y: rect.top + pAbs.y, 
+                  value: (s.radius/SCALE_M).toFixed(3),
+                  onCommit: (vStr) => commitDim(v1, v2, vStr, '', '⌀ ')
+                } 
+              });
+            } else if (s.type === 'line') {
+              setDimSelection([{ sketchId: s.id, type: 'edge', line: s }]);
+            } else if (s.type === 'sector' && snapped.line) {
+              setDimSelection([{ sketchId: s.id, type: 'edge', line: snapped.line }]);
+            }
+          } else {
+            setDimSelection([snapped]);
           }
-        } else if (snapped.snapped) {
-          setDimSelection([snapped]);
         }
-      } else {
-        const v1 = dimSelection[0];
-        const v2 = snapped;
-        if (v2.snapped && (v1.sketchId !== v2.sketchId || v1.part !== v2.part)) {
-          const pAbs = stage.getAbsoluteTransform().point({x: (v1.x+v2.x)/2, y: (v1.y+v2.y)/2});
-          const rect = stage.container().getBoundingClientRect();
-          setOverlay({ 
-            component: DimOverlay, 
-            props: { 
-              x: RULER + pAbs.x, y: RULER + pAbs.y, 
-              value: (vec.dist(v1, v2)/SCALE_M).toFixed(3), tolerance: '',
-              onCommit: (vStr, tStr) => commitDim(v1, v2, vStr, tStr)
-            } 
-          });
+      } else if (dimSelection.length === 1) {
+        const first = dimSelection[0];
+        
+        if (first.type === 'edge') {
+          if (snapped.type === 'edge') {
+            const s2 = sketches.find(sk => sk.id === snapped.sketchId);
+            if (!s2) return;
+            const s2Line = snapped.line || s2;
+            if (s2Line.type !== 'line') return;
+            
+            if (s2.id === first.sketchId && (!snapped.line || snapped.line.part2 === first.line.part2)) return;
+            
+            const s1 = first.line;
+
+            // Validation: ensure they share a point
+            const sharedCoincide = constraintsRef.current.some(c => 
+              (c.type === 'coincide' || c.type === 'coincident') &&
+              ((c.v1.sketchId === s1.id && c.v2.sketchId === s2.id) || 
+               (c.v1.sketchId === s2.id && c.v2.sketchId === s1.id))
+            );
+            const sharePoint = 
+              (Math.abs(s1.points[0] - s2Line.points[0]) < 0.001 && Math.abs(s1.points[1] - s2Line.points[1]) < 0.001) ||
+              (Math.abs(s1.points[0] - s2Line.points[2]) < 0.001 && Math.abs(s1.points[1] - s2Line.points[3]) < 0.001) ||
+              (Math.abs(s1.points[2] - s2Line.points[0]) < 0.001 && Math.abs(s1.points[3] - s2Line.points[1]) < 0.001) ||
+              (Math.abs(s1.points[2] - s2Line.points[2]) < 0.001 && Math.abs(s1.points[3] - s2Line.points[3]) < 0.001);
+
+            if (!sharedCoincide && !sharePoint) {
+              alert('⚠️ To measure an angle, the two lines must be connected (share a coincident point).');
+              setDimSelection([]);
+              return;
+            }
+
+            const dx1 = s1.points[2] - s1.points[0], dy1 = s1.points[3] - s1.points[1];
+            const dx2 = s2Line.points[2] - s2Line.points[0], dy2 = s2Line.points[3] - s2Line.points[1];
+            let angleRad = Math.acos((dx1*dx2 + dy1*dy2) / (Math.sqrt(dx1*dx1+dy1*dy1) * Math.sqrt(dx2*dx2+dy2*dy2)));
+            let currentAngle = (angleRad * 180 / Math.PI).toFixed(1);
+            
+            const v1 = { sketchId: s1.id, part: s1.part2 || 'start', x: s1.points[0], y: s1.points[1] };
+            const v2 = { sketchId: s2Line.id, part: s2Line.part2 || 'start', x: s2Line.points[0], y: s2Line.points[1] };
+            
+            const pAbs = stage.getAbsoluteTransform().point({x: pos.x, y: pos.y});
+            const rect = stage.container().getBoundingClientRect();
+            setOverlay({
+              component: DimOverlay,
+              props: {
+                x: rect.left + pAbs.x, y: rect.top + pAbs.y,
+                value: currentAngle,
+                onCommit: (vStr) => {
+                  setOverlay(null);
+                  const angleVal = parseFloat(vStr);
+                  if (isNaN(angleVal)) return;
+                  const newConstraint = { type: 'angle', v1, v2, value: angleVal, id: Date.now() };
+                  pushToHistory();
+                  const allConstraints = [...constraintsRef.current, newConstraint];
+                  const solveResult = runSolver(sketchesRef.current, allConstraints, dimensionsRef.current, fixedPointsRef.current, SCALE_M, referenceVertices);
+                  if (solveResult.error) {
+                    alert('⚠️ Constraint Error:\n\n' + solveResult.error);
+                  } else {
+                    setSketches(solveResult.sketches);
+                    if (setConstraints) setConstraints(allConstraints);
+                    // Also store as a visible dimension annotation
+                    const angleDim = { id: Date.now() + 1, v1, v2, value: angleVal, label: angleVal.toFixed(1), symbol: '°', isAngle: true };
+                    if (setDimensions) setDimensions(prev => [...prev, angleDim]);
+                  }
+                },
+                onCancel: () => setOverlay(null)
+              }
+            });
+            setDimSelection([]);
+          } else if (!snapped.snapped) {
+            const s = first.line;
+            const v1 = { x: s.points[0], y: s.points[1], sketchId: s.id, part: s.part1 || 'start' };
+            const v2 = { x: s.points[2], y: s.points[3], sketchId: s.id, part: s.part2 || 'end' };
+            const pAbs = stage.getAbsoluteTransform().point({x: pos.x, y: pos.y});
+            const rect = stage.container().getBoundingClientRect();
+            setOverlay({ 
+              component: DimOverlay, 
+              props: { 
+                x: rect.left + pAbs.x, y: rect.top + pAbs.y, 
+                value: (vec.dist(v1, v2)/SCALE_M).toFixed(3),
+                onCommit: (vStr) => commitDim(v1, v2, vStr, '')
+              } 
+            });
+            setDimSelection([]);
+          } else {
+            setDimSelection([snapped]);
+          }
+        } else {
+          if (snapped.snapped && !snapped.type && (first.sketchId !== snapped.sketchId || first.part !== snapped.part)) {
+            const pAbs = stage.getAbsoluteTransform().point({x: pos.x, y: pos.y});
+            const rect = stage.container().getBoundingClientRect();
+            setOverlay({ 
+              component: DimOverlay, 
+              props: { 
+                x: rect.left + pAbs.x, y: rect.top + pAbs.y, 
+                value: (vec.dist(first, snapped)/SCALE_M).toFixed(3),
+                onCommit: (vStr) => commitDim(first, snapped, vStr, '')
+              } 
+            });
+            setDimSelection([]);
+          }
         }
-        setDimSelection([]);
       }
       return;
     }
@@ -629,19 +902,14 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     // ── Anchor / Fixed-point tool ──
     if (activeTool === 'anchor') {
       if (!snapped.snapped || !snapped.sketchId) return;
-      // Toggle: if already fixed, unfix it; otherwise add it
-      const existingIdx = fixedPoints.findIndex(
-        f => f.sketchId === snapped.sketchId && f.part === snapped.part
-      );
+      const existingIdx = fixedPoints.findIndex(f => f.sketchId === snapped.sketchId && f.part === snapped.part);
       if (existingIdx !== -1) {
-        // Remove fixed point
         const updatedFixed = fixedPoints.filter((_, i) => i !== existingIdx);
         if (setFixedPoints) setFixedPoints(updatedFixed);
       } else {
         const newFixed = { sketchId: snapped.sketchId, part: snapped.part, x: snapped.x, y: snapped.y };
         const updatedFixed = [...fixedPoints, newFixed];
         if (setFixedPoints) setFixedPoints(updatedFixed);
-        // Re-solve with the new anchor in place
         const solveResult = runSolver(sketches, constraints, dimensions, updatedFixed, SCALE_M, referenceVertices);
         if (!solveResult.error) setSketches(solveResult.sketches);
       }
@@ -651,15 +919,25 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     const isConstraintTool = ['coincide', 'coincident', 'equal', 'vertical', 'horizontal', 'parallel', 'perpendicular'].includes(activeTool);
     if (isConstraintTool) {
       if (!snapped.snapped) return;
+      
+      let targetSnap = snapped;
+      if (snapped.type === 'edge') {
+         if (['parallel', 'perpendicular', 'equal'].includes(activeTool)) {
+            const edgePart = snapped.line && snapped.line.part2 ? snapped.line.part2 : 'start';
+            targetSnap = { sketchId: snapped.sketchId, part: edgePart, x: snapped.x, y: snapped.y, snapped: true, type: 'edge', line: snapped.line };
+         } else {
+            return;
+         }
+      }
+
       setConstraintSelection(prev => {
-        // Prevent clicking exact same piece of geometry for multi-click tools
-        if (prev.length === 1 && prev[0].sketchId === snapped.sketchId && prev[0].part === snapped.part) return prev;
-        return [...prev, snapped];
+        if (prev.length === 1 && prev[0].sketchId === targetSnap.sketchId) return prev;
+        return [...prev, targetSnap];
       });
       return;
     }
 
-    if (activeTool === 'line' || activeTool === 'circle' || activeTool === 'rect') {
+    if (activeTool === 'line' || activeTool === 'circle' || activeTool === 'rect' || activeTool === 'sector') {
       const shapeProps = { construction: isConstructionMode, op: isSubtractionMode ? 'subtract' : 'union' };
       
       if (drawingState.current.step === 0) {
@@ -667,6 +945,17 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
         if (activeTool === 'line') setNewShape({ type: 'line', points: [snapped.x, snapped.y, snapped.x, snapped.y], ...shapeProps });
         else if (activeTool === 'circle') setNewShape({ type: 'circle', center: [snapped.x, snapped.y], radius: 0, ...shapeProps });
         else if (activeTool === 'rect') setNewShape({ type: 'rect', start: [snapped.x, snapped.y], end: [snapped.x, snapped.y], ...shapeProps });
+        else if (activeTool === 'sector') setNewShape({ type: 'sector', center: [snapped.x, snapped.y], radius: 0, startAngle: 0, sweepAngle: 0, ...shapeProps });
+      } else if (activeTool === 'sector' && drawingState.current.step === 1) {
+        // Sector step 1 → 2: lock startAngle from current mouse position
+        const dx = pos.x - newShape.center[0];
+        const dy = pos.y - newShape.center[1];
+        const startAngle = Math.atan2(dy, dx);
+        setNewShape(prev => ({ ...prev, startAngle, sweepAngle: 0 }));
+        drawingState.current.step = 2;
+      } else if (activeTool === 'sector' && drawingState.current.step === 2 && newShape) {
+        // Sector step 2 → finalize on second click
+        finalizeShape(snapped);
       } else if (activeTool === 'line' && newShape) {
         // Chain line: Continue to next segment
         const typeCount = sketchesRef.current.filter(s => s.type === 'line').length + 1;
@@ -745,6 +1034,22 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     if (newShape.type === 'line') setNewShape({ ...newShape, points: [newShape.points[0], newShape.points[1], snapped.x, snapped.y] });
     else if (newShape.type === 'circle') setNewShape({ ...newShape, radius: vec.dist({x: newShape.center[0], y: newShape.center[1]}, snapped) });
     else if (newShape.type === 'rect') setNewShape({ ...newShape, end: [snapped.x, snapped.y] });
+    else if (newShape.type === 'sector') {
+       const dx = pos.x - newShape.center[0];
+       const dy = pos.y - newShape.center[1];
+       let ang = Math.atan2(dy, dx);
+       
+       if (drawingState.current.step === 1) {
+           // Step 1: only update radius — no startAngle locking yet
+           const r = vec.dist({x: newShape.center[0], y: newShape.center[1]}, pos);
+           setNewShape({ ...newShape, radius: r });
+       } else if (drawingState.current.step === 2) {
+           // Step 2: startAngle was locked on click; now drag the sweep
+           let rawSweep = ang - newShape.startAngle;
+           if (rawSweep < 0) rawSweep += 2 * Math.PI;
+           setNewShape({ ...newShape, sweepAngle: rawSweep });
+       }
+    }
   }, [newShape, snapPos, selectionBox, activeTool]);
 
   const handleMouseUp = useCallback((e) => {
@@ -783,7 +1088,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
 
     // Only auto-finalize for Circle/Rect via drag. 
     // Line (Polyline) requires explicit clicks or dblclick to finalize.
-    if (drawingState.current.step === 1 && drawingState.current.isDragging && newShape && activeTool !== 'line') {
+    if (drawingState.current.step === 1 && drawingState.current.isDragging && newShape && activeTool !== 'line' && activeTool !== 'sector') {
       finalizeShape();
     }
   }, [selectionBox, newShape, finalizeShape, activeTool]);
@@ -821,6 +1126,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
               return <Line key={`${s.id}-e${i}`} points={pts} stroke={edgeColor} strokeWidth={edgeWidth} dash={dash} />;
             });
           })()}
+          {s.type === 'sector' && <Wedge x={s.center[0]} y={s.center[1]} radius={s.radius} angle={s.sweepAngle * 180 / Math.PI} rotation={s.startAngle * 180 / Math.PI} stroke={color} strokeWidth={strokeWidth} dash={dash} shadowBlur={isSelected ? 5 : 0} shadowColor="#00e5ff" />}
         </Group>
       )})}
       {newShape && (
@@ -828,9 +1134,72 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
           {newShape.type === 'line' && <Line points={newShape.points} stroke="yellow" strokeWidth={2 / scale} dash={[5/scale, 5/scale]} />}
           {newShape.type === 'circle' && <Circle x={newShape.center[0]} y={newShape.center[1]} radius={newShape.radius} stroke="yellow" strokeWidth={2 / scale} dash={[5/scale, 5/scale]} />}
           {newShape.type === 'rect' && <Line points={[newShape.start[0], newShape.start[1], newShape.end[0], newShape.start[1], newShape.end[0], newShape.end[1], newShape.start[0], newShape.end[1], newShape.start[0], newShape.start[1]]} stroke="yellow" strokeWidth={2 / scale} closed dash={[5/scale, 5/scale]} />}
+          {newShape.type === 'sector' && <Wedge x={newShape.center[0]} y={newShape.center[1]} radius={newShape.radius} angle={newShape.sweepAngle * 180 / Math.PI} rotation={newShape.startAngle * 180 / Math.PI} stroke="yellow" strokeWidth={2 / scale} dash={[5/scale, 5/scale]} />}
         </Group>
       )}
       {dimensions.map(d => {
+        if (d.isAngle) {
+          // Render as an arc annotation
+          const s1 = sketches.find(sk => sk.id === d.v1.sketchId);
+          const s2 = sketches.find(sk => sk.id === d.v2.sketchId);
+          if (!s1 || !s2) return null;
+          // Find shared vertex (center of arc)
+          const p1s = resolveCadPoint(s1, 'start'), p1e = resolveCadPoint(s1, 'end');
+          const p2s = resolveCadPoint(s2, 'start'), p2e = resolveCadPoint(s2, 'end');
+          const isCenter = d.v1.part === 'center' || d.v2.part === 'center';
+          let cx, cy, r1x, r1y, r2x, r2y;
+          if (isCenter) {
+            // Sector sweep angle — center is the sector center
+            const sc = s1.id === d.v1.sketchId ? s1 : s2;
+            cx = sc.center[0]; cy = sc.center[1];
+            r1x = sc.center[0] + sc.radius * Math.cos(sc.startAngle);
+            r1y = sc.center[1] + sc.radius * Math.sin(sc.startAngle);
+            r2x = sc.center[0] + sc.radius * Math.cos(sc.startAngle + sc.sweepAngle);
+            r2y = sc.center[1] + sc.radius * Math.sin(sc.startAngle + sc.sweepAngle);
+          } else {
+            // Lines sharing a vertex
+            const distThresh = 2;
+            const isS1S2 = Math.hypot(p1s.x - p2s.x, p1s.y - p2s.y) < distThresh;
+            const isS1E2 = Math.hypot(p1s.x - p2e.x, p1s.y - p2e.y) < distThresh;
+            const isE1S2 = Math.hypot(p1e.x - p2s.x, p1e.y - p2s.y) < distThresh;
+            const isE1E2 = Math.hypot(p1e.x - p2e.x, p1e.y - p2e.y) < distThresh;
+            if (isS1S2) { cx = p1s.x; cy = p1s.y; r1x = p1e.x; r1y = p1e.y; r2x = p2e.x; r2y = p2e.y; }
+            else if (isS1E2) { cx = p1s.x; cy = p1s.y; r1x = p1e.x; r1y = p1e.y; r2x = p2s.x; r2y = p2s.y; }
+            else if (isE1S2) { cx = p1e.x; cy = p1e.y; r1x = p1s.x; r1y = p1s.y; r2x = p2e.x; r2y = p2e.y; }
+            else if (isE1E2) { cx = p1e.x; cy = p1e.y; r1x = p1s.x; r1y = p1s.y; r2x = p2s.x; r2y = p2s.y; }
+            else {
+              // Fallback: use midpoints
+              cx = (p1s.x + p1e.x) / 2; cy = (p1s.y + p1e.y) / 2;
+              r1x = p1e.x; r1y = p1e.y; r2x = p2e.x; r2y = p2e.y;
+            }
+          }
+          return <AngleAnnotation key={d.id} cx={cx} cy={cy} r1x={r1x} r1y={r1y} r2x={r2x} r2y={r2y} label={d.label} scale={scale} onClick={(e) => {
+            e.cancelBubble = true;
+            const stage = e.target.getStage();
+            const rect = stage.container().getBoundingClientRect();
+            const pAbs = stage.getAbsoluteTransform().point({ x: cx, y: cy });
+            setOverlay({ component: DimOverlay, props: {
+              x: rect.left + pAbs.x, y: rect.top + pAbs.y,
+              value: d.value.toFixed(1),
+              onCommit: (vStr) => {
+                const newVal = parseFloat(vStr);
+                if (!isNaN(newVal)) {
+                  const updatedDimensions = dimensionsRef.current.map(dd => dd.id === d.id ? { ...dd, value: newVal, label: newVal.toFixed(1) } : dd);
+                  // Update the matching angle constraint value too
+                  const updatedConstraints = constraintsRef.current.map(c => c.type === 'angle' && c.v1.sketchId === d.v1.sketchId && c.v2.sketchId === d.v2.sketchId ? { ...c, value: newVal } : c);
+                  const solveResult = runSolver(sketchesRef.current, updatedConstraints, updatedDimensions, fixedPointsRef.current, SCALE_M, referenceVertices);
+                  if (!solveResult.error) {
+                    setSketches(solveResult.sketches);
+                    if (setConstraints) setConstraints(updatedConstraints);
+                    if (setDimensions) setDimensions(updatedDimensions);
+                  }
+                }
+                setOverlay(null);
+              },
+              onCancel: () => setOverlay(null)
+            }});
+          }} />;
+        }
         const s1 = sketches.find(sk => sk.id === d.v1.sketchId);
         const s2 = sketches.find(sk => sk.id === d.v2.sketchId);
         if (!s1 || !s2) return null;
@@ -861,9 +1230,21 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
       })}
       
       {/* Visual Feedback for Selections */}
-      {[...dimSelection, ...constraintSelection].map((v, i) => (
-        <Circle key={`sel-${i}`} x={v.x} y={v.y} radius={8 / scale} fill="rgba(255,165,0,0.8)" listening={false} stroke="white" strokeWidth={1.5/scale} />
-      ))}
+      {[...dimSelection, ...constraintSelection].map((v, i) => {
+        if (v.type === 'edge' || (['parallel', 'perpendicular', 'equal'].includes(activeTool) && v.sketchId)) {
+           if (v.line && v.line.points) {
+              return <Line key={`sel-${i}`} points={v.line.points} stroke="rgba(255,165,0,0.8)" strokeWidth={4/scale} listening={false} />;
+           }
+           const sk = sketches.find(s => s.id === v.sketchId);
+           if (sk && sk.type === 'line') {
+              return <Line key={`sel-${i}`} points={sk.points} stroke="rgba(255,165,0,0.8)" strokeWidth={4/scale} listening={false} />;
+           }
+        }
+        if (v.x !== undefined && v.y !== undefined) {
+          return <Circle key={`sel-${i}`} x={v.x} y={v.y} radius={8 / scale} fill="rgba(255,165,0,0.8)" listening={false} stroke="white" strokeWidth={1.5/scale} />;
+        }
+        return null;
+      })}
 
       {/* Marquee Selection Box */}
       {selectionBox && (

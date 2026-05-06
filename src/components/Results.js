@@ -11,7 +11,9 @@ import {
   Ruler, 
   DotsSix, 
   Link, 
-  Equals, 
+  Equals,
+  GpsFix,
+  Anchor, 
   ArrowUp, 
   ArrowRight, 
   Rows, 
@@ -35,6 +37,7 @@ import { parseWktToKonva } from '../utils/wktParser';
 import GridCanvas, { SCALE_M } from './GridCanvas';
 import LidarMarker from './LidarMarker';
 import CADSketcher from './CADSketcher';
+import CADToolbar from './CADToolbar';
 import ConstraintList from './ConstraintList';
 import { sketchesToWkt } from '../utils/cadToWkt';
 import { propagateConstraints } from '../utils/cadSolver';
@@ -101,7 +104,7 @@ const LIDAR_COLORS = ['rgba(0, 255, 255, 0.5)', 'rgba(0, 255, 0, 0.5)', 'rgba(25
 // Exact SafetyStudio.py Parity Styles
 const FIELD_GOLD_FILL = 'rgba(255, 215, 0, 0.4)';
 const FIELD_GOLD_STROKE = '#FFD700';
-const IGNORED_GRAY_FILL = 'rgba(80, 80, 80, 0.5)';
+const IGNORED_GRAY_FILL = '#4d4d4d';
 const FIELD_STROKE_WIDTH = 1.5;
 
 const Results = ({ globals }) => {
@@ -140,6 +143,8 @@ const Results = ({ globals }) => {
   const [previewFieldWkt, setPreviewFieldWkt] = useState(null); // live boolean result
   const [isGenOpen, setIsGenOpen] = useState(false);
   const [cadSnapshot, setCadSnapshot] = useState(null);
+  const [maskCad, setMaskCad] = useState(null);
+  const [maskCadHistory, setMaskCadHistory] = useState([]);
 
   const targetSketches = cadData?.Overrides?.[selectedCaseId]?.sketches || [];
   const targetDimensions = cadData?.Overrides?.[selectedCaseId]?.dimensions || [];
@@ -160,10 +165,22 @@ const Results = ({ globals }) => {
     }
   };
 
+  const handleMaskCadUndo = () => {
+    if (maskCadHistory.length === 0) return;
+    const [last, ...remaining] = maskCadHistory;
+    try {
+      setMaskCad(JSON.parse(last));
+      setMaskCadHistory(remaining);
+    } catch (e) {
+      console.error("Mask CAD Undo failed", e);
+    }
+  };
+
   const handleClearSketch = () => {
     if (confirm("Are you sure you want to clear all CAD sketches and constraints?")) {
       pushToHistory();
-      setDraftCad(prev => ({ ...prev, sketches: [], constraints: [], dimensions: [], fixedPoints: [] }));
+      if (isEditMode) setDraftCad(prev => ({ ...prev, sketches: [], constraints: [], dimensions: [], fixedPoints: [] }));
+      if (isEditingMask) setMaskCad(prev => ({ ...prev, sketches: [], constraints: [], dimensions: [], fixedPoints: [] }));
     }
   };
 
@@ -261,17 +278,25 @@ const Results = ({ globals }) => {
 
   // --- Live Boolean Preview (union/subtract sketches onto the existing composite field) ---
   useEffect(() => {
-    if (!isEditMode || resultsMode !== 'cad' || !draftCad) {
+    const active = isEditMode || isEditingMask;
+    if (!active || resultsMode !== 'cad') {
       setPreviewFieldWkt(null);
       return;
     }
-    const baseWkt = currentResult?.final_field_wkt;
-    if (!baseWkt && (!draftCad.sketches || draftCad.sketches.length === 0)) {
+    const activeCad = isEditMode ? draftCad : maskCad;
+    if (!activeCad) {
       setPreviewFieldWkt(null);
       return;
     }
 
-    const { wkt: sketchWkt, error } = sketchesToWkt(draftCad.sketches, SCALE_M);
+    const baseWkt = isEditMode ? currentResult?.final_field_wkt : currentResult?.ignored_wkt;
+    
+    if (!baseWkt && (!activeCad.sketches || activeCad.sketches.length === 0)) {
+      setPreviewFieldWkt(null);
+      return;
+    }
+
+    const { wkt: sketchWkt, error } = sketchesToWkt(activeCad.sketches || [], SCALE_M);
     if (error || !sketchWkt) {
       // No valid sketch drawn yet — show base as-is
       setPreviewFieldWkt(baseWkt || null);
@@ -279,30 +304,30 @@ const Results = ({ globals }) => {
     }
 
     // Convert WKT strings to polygon-clipping MultiPolygon format [ Polygon, ... ]
-    // where Polygon is [ [ [x,y],... ], ... ] (exterior ring, then interior rings/holes)
     const wktToRings = (wktStr) => {
       if (!wktStr) return null;
-      const geojson = parse(wktStr);
-      if (!geojson) return null;
+      try {
+        const geojson = parse(wktStr);
+        if (!geojson) return null;
 
-      const results = [];
-      const processPolygon = (poly) => {
-        if (!Array.isArray(poly)) return;
-        results.push(poly.map(ring => {
-          return ring.map(pt => [pt[0], pt[1]]);
-        }));
-      };
+        const results = [];
+        const processPolygon = (poly) => {
+          if (!Array.isArray(poly)) return;
+          results.push(poly.map(ring => {
+            return ring.map(pt => [pt[0], pt[1]]);
+          }));
+        };
 
-      if (geojson.type === 'Polygon' && geojson.coordinates) {
-        processPolygon(geojson.coordinates);
-      } else if (geojson.type === 'MultiPolygon' && geojson.coordinates) {
-        geojson.coordinates.forEach(processPolygon);
-      }
-      return results;
+        if (geojson.type === 'Polygon' && geojson.coordinates) {
+          processPolygon(geojson.coordinates);
+        } else if (geojson.type === 'MultiPolygon' && geojson.coordinates) {
+          geojson.coordinates.forEach(processPolygon);
+        }
+        return results;
+      } catch(e) { return null; }
     };
 
-    // Convert the sketch WKT into additive + subtractive shapes
-    const activeSketches = draftCad.sketches.filter(s => !s.construction);
+    const activeSketches = (activeCad.sketches || []).filter(s => !s.construction);
     const hasSubtract = activeSketches.some(s => s.op === 'subtract');
     const hasUnion = activeSketches.some(s => s.op !== 'subtract');
 
@@ -352,7 +377,8 @@ const Results = ({ globals }) => {
       console.warn('Preview boolean failed:', err);
       setPreviewFieldWkt(baseWkt || null);
     }
-  }, [draftCad, isEditMode, resultsMode, selectedCaseId, currentResult]);
+  }, [draftCad, maskCad, isEditMode, isEditingMask, resultsMode, selectedCaseId, currentResult]);
+
 
   const buildPayload = (k) => {
     if (!k) return null;
@@ -756,7 +782,7 @@ const Results = ({ globals }) => {
           )}
         </div>
 
-        {viewMode === 'Composite' && isEditMode && (
+        {viewMode === 'Composite' && (isEditMode || isEditingMask) && (
           <div className="segmented-control">
              <button onClick={() => setResultsMode('polygon')} className={`segmented-btn ${resultsMode === 'polygon' ? 'active' : ''}`}>
                POLYGON
@@ -767,83 +793,85 @@ const Results = ({ globals }) => {
           </div>
         )}
 
-        {isEditMode && resultsMode === 'cad' && viewMode === 'Composite' && (
-          <div style={{ display: 'flex', gap: 5, background: '#222', padding: '2px 8px', borderRadius: 6, alignItems: 'center', marginLeft: 10 }}>
-            <button onClick={() => setActiveTool('select')} style={{ background: activeTool === 'select' ? 'var(--primary)' : 'transparent', color: activeTool === 'select' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><SelectionPlus size={16} weight="bold" /></button>
-            <button onClick={() => setActiveTool('line')} style={{ background: activeTool === 'line' ? 'var(--primary)' : 'transparent', color: activeTool === 'line' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><LineSegment size={16} weight="bold" /></button>
-            <button onClick={() => setActiveTool('rect')} style={{ background: activeTool === 'rect' ? 'var(--primary)' : 'transparent', color: activeTool === 'rect' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><Rectangle size={16} weight="bold" /></button>
-            <button onClick={() => setActiveTool('circle')} style={{ background: activeTool === 'circle' ? 'var(--primary)' : 'transparent', color: activeTool === 'circle' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><CircleIcon size={16} weight="bold" /></button>
-            <button onClick={() => setActiveTool('dimension')} style={{ background: activeTool === 'dimension' ? 'var(--primary)' : 'transparent', color: activeTool === 'dimension' ? '#fff' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><Ruler size={16} weight="bold" /></button>
-            <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
-            
-            <button onClick={() => {
-              if (cadRef.current && cadRef.current.hasSelection) {
-                cadRef.current.toggleConstruction();
-              } else {
-                setIsConstructionMode(!isConstructionMode);
-              }
-            }} title={cadRef.current && cadRef.current.hasSelection ? "Toggle Construction for Selected" : "Toggle Construction Mode for New Shapes"}
-              style={{ background: isConstructionMode ? '#5c4d1a' : (cadRef.current && cadRef.current.hasSelection ? '#333' : 'transparent'), color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}>
-               <Hammer size={16} weight="bold" />
-            </button>
-            <button onClick={() => setIsSubtractionMode(!isSubtractionMode)} title="Toggle Subtraction Mode (Removal)"
-              style={{ background: isSubtractionMode ? '#5c1a1a' : 'transparent', color: isSubtractionMode ? '#ff5252' : '#888', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}>
-               <Subtract size={16} weight="fill" />
-            </button>
-            <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
-            <button 
-              onClick={isEditMode && resultsMode === 'cad' ? handleCadUndo : undo} 
-              style={{ background: 'transparent', color: '#666', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }} 
-              title="Undo">
-              <ArrowUUpLeft size={16} weight="bold" />
-            </button>
-            <button onClick={handleClearSketch} style={{ background: 'transparent', color: 'rgba(255, 82, 82, 0.4)', border: 'none', padding: '6px', cursor: 'pointer', borderRadius: 6, transition: 'all 0.2s' }}><Trash size={16} weight="bold" /></button>
-            <div style={{ width: 1, height: 16, background: '#444', margin: '0 4px' }} />
-            <button onClick={async () => {
-              const finalWkt = previewFieldWkt;
-              if (!finalWkt) {
-                alert("No sketches found to finalize.");
-                return;
-              }
+        {(isEditMode || isEditingMask) && resultsMode === 'cad' && viewMode === 'Composite' && (
+          <div style={{ marginLeft: 10 }}>
+            <CADToolbar
+              activeTool={activeTool}
+              setActiveTool={setActiveTool}
+              isConstructionMode={isConstructionMode}
+              setIsConstructionMode={setIsConstructionMode}
+              isSubtractionMode={isSubtractionMode}
+              setIsSubtractionMode={setIsSubtractionMode}
+              undo={(isEditMode || isEditingMask) && resultsMode === 'cad' ? (isEditMode ? handleCadUndo : handleMaskCadUndo) : undo}
+              handleClearSketch={handleClearSketch}
+              onConstructionClick={() => {
+                if (cadRef.current && cadRef.current.hasSelection) {
+                  cadRef.current.toggleConstruction();
+                } else {
+                  setIsConstructionMode(!isConstructionMode);
+                }
+              }}
+            >
+              {!isEditingMask && (
+                <button onClick={async () => {
+                const finalWkt = previewFieldWkt;
+                if (!finalWkt) {
+                  alert("No sketches found to finalize.");
+                  return;
+                }
 
-              // 1. Auto-save sketches session to cadData
-              if (draftCad) {
-                 setCadFieldSafe('Overrides', selectedCaseId, 'sketches', draftCad.sketches);
-                 setCadFieldSafe('Overrides', selectedCaseId, 'dimensions', draftCad.dimensions);
-                 setCadFieldSafe('Overrides', selectedCaseId, 'constraints', draftCad.constraints);
-                 setCadFieldSafe('Overrides', selectedCaseId, 'fixedPoints', draftCad.fixedPoints);
-              }
+                // 1. Auto-save sketches session to cadData
+                if (draftCad) {
+                   setCadFieldSafe('Overrides', selectedCaseId, 'sketches', draftCad.sketches);
+                   setCadFieldSafe('Overrides', selectedCaseId, 'dimensions', draftCad.dimensions);
+                   setCadFieldSafe('Overrides', selectedCaseId, 'constraints', draftCad.constraints);
+                   setCadFieldSafe('Overrides', selectedCaseId, 'fixedPoints', draftCad.fixedPoints);
+                }
 
-              // 2. Prepare updated case with custom_dxf
-              const updatedCases = [...evaluationCases];
-              const idx = updatedCases.findIndex(c => c.id === selectedCaseId);
-              if (idx !== -1) {
-                updatedCases[idx] = { ...updatedCases[idx], custom_dxf: finalWkt };
-                pushToHistory();
-                setEvaluationCases(updatedCases);
-                
-                // 3. Trigger immediate calculation with updated case to avoid race condition
-                await handleCalculate(updatedCases[idx]);
-              }
+                // 2. Prepare updated case with custom_dxf
+                const updatedCases = [...evaluationCases];
+                const idx = updatedCases.findIndex(c => c.id === selectedCaseId);
+                if (idx !== -1) {
+                  updatedCases[idx] = { ...updatedCases[idx], custom_dxf: finalWkt };
+                  pushToHistory();
+                  setEvaluationCases(updatedCases);
+                  
+                  // 3. Trigger immediate calculation with updated case to avoid race condition
+                  await handleCalculate(updatedCases[idx]);
+                }
 
-              setIsEditMode(false);
-            }} style={{ background: '#1a4a25', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
-              Finalize
-            </button>
+                setIsEditMode(false);
+              }} style={{ background: '#1a4a25', color: '#fff', border: 'none', padding: '3px 8px', borderRadius: 4, cursor: 'pointer', fontSize: '0.75rem', fontWeight: 'bold' }}>
+                Finalize
+              </button>
+              )}
+          </CADToolbar>
           </div>
         )}
 
         <div style={{ flex: 1 }} />
 
-        {/* Edit Mask button — only in Composite view when a result exists */}
-        {viewMode === 'Composite' && currentResult?.ignored_wkt && (
+        {/* Edit Mask button — only in Composite view */}
+        {viewMode === 'Composite' && currentResult && !isEditMode && (
           <button
             onClick={() => {
               if (!isEditingMask) {
                 originalMaskWkt.current = currentResult.ignored_wkt;
+                setMaskCad({ sketches: [], dimensions: [], fixedPoints: [], constraints: [] });
                 setIsEditingMask(true);
                 setIsEditMode(false);
               } else {
+                if (resultsMode === 'cad' && previewFieldWkt) {
+                  setResults(prev => {
+                    const updated = { ...prev };
+                    Object.keys(updated).forEach(id => {
+                      if (updated[id]) updated[id] = { ...updated[id], ignored_wkt: previewFieldWkt };
+                    });
+                    return updated;
+                  });
+                  // Clear mask sketches after baking them into the ignored_wkt
+                  setMaskCad(null);
+                }
                 originalMaskWkt.current = null;
                 setIsEditingMask(false);
               }
@@ -878,23 +906,27 @@ const Results = ({ globals }) => {
 
         <div style={{ width: 1, background: 'rgba(255,255,255,0.1)', height: 16, marginLeft: 4, marginRight: 4 }} />
 
-        {viewMode === 'Composite' && (
+        {viewMode === 'Composite' && !isEditingMask && (
           <button onClick={() => setIsEditMode(!isEditMode)} className={`toolbar-action-btn ${isEditMode ? 'danger' : 'primary'}`} style={{ minWidth: 90, justifyContent: 'center', gap: 6 }}>
             {isEditMode ? (resultsMode === 'cad' ? 'EXIT' : 'DONE') : <><PencilSimple size={14} weight="fill" /> EDIT</>}
           </button>
         )}
 
-        <button onClick={() => setIsGenOpen(true)} className="toolbar-action-btn" style={{ background: '#581c87', color: '#fff' }}>
-          <Stack size={14} weight="bold" color="#fff" /> EVALUATION
-        </button>
+        {!isEditMode && !isEditingMask && (
+          <>
+            <button onClick={() => setIsGenOpen(true)} className="toolbar-action-btn" style={{ background: '#581c87', color: '#fff' }}>
+              <Stack size={14} weight="bold" color="#fff" /> EVALUATION
+            </button>
 
-        <button onClick={handleCalculate} disabled={isCalculating} className="toolbar-action-btn info">
-          {isCalculating ? '...' : <><Play size={14} weight="bold" /> CALC</>}
-        </button>
-        
-        <button onClick={handleCalculateAll} disabled={isCalculating} className="toolbar-action-btn success">
-          <Lightning size={14} weight="bold" /> ALL
-        </button>
+            <button onClick={handleCalculate} disabled={isCalculating} className="toolbar-action-btn info">
+              {isCalculating ? '...' : <><Play size={14} weight="bold" /> CALC</>}
+            </button>
+            
+            <button onClick={handleCalculateAll} disabled={isCalculating} className="toolbar-action-btn success">
+              <Lightning size={14} weight="bold" /> ALL
+            </button>
+          </>
+        )}
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
@@ -952,7 +984,7 @@ const Results = ({ globals }) => {
         {/* Canvas Area (Z-stacking alignment with SafetyStudio.py) */}
         <div style={{ flex: 1, position: 'relative' }}>
           
-          <GridCanvas stagePos={stagePos} onStagePosChange={setStagePos} draggable={!isEditMode || activeTool === 'select'}>
+          <GridCanvas stagePos={stagePos} onStagePosChange={setStagePos} draggable={!(isEditMode || isEditingMask) || activeTool === 'select'}>
             {({ scale, setOverlay }) => (
               <Layer ref={layerRef}>
                 {/* 1. Static Sweeps (Z -10 equivalent) */}
@@ -1108,8 +1140,10 @@ const Results = ({ globals }) => {
                    );
                 })}
 
+
+
                 {/* 9b. Mask (Ignored) Handles */}
-                {isEditingMask && viewMode === 'Composite' && parsedIgnored.map((poly, polyIdx) => (
+                {isEditingMask && resultsMode === 'polygon' && viewMode === 'Composite' && parsedIgnored.map((poly, polyIdx) => (
                   <Group key={`mask-edit-${polyIdx}`}>
                     {/* Edges Midpoints (Add Points) */}
                     {Array.from({ length: poly.length / 2 - 1 }).map((_, pIdx) => {
@@ -1146,7 +1180,11 @@ const Results = ({ globals }) => {
                 ))}
 
                 {/* 10. CAD Sketcher */}
-                {isEditMode && resultsMode === 'cad' && draftCad && (() => {
+                {(isEditMode || isEditingMask) && resultsMode === 'cad' && (isEditMode ? draftCad : maskCad) && (() => {
+                  const activeCad = isEditMode ? draftCad : maskCad;
+                  const setActiveCad = isEditMode ? setDraftCad : setMaskCad;
+                  const activeUndoHistory = isEditMode ? cadHistory : maskCadHistory;
+                  const setActiveUndoHistory = isEditMode ? setCadHistory : setMaskCadHistory;
                   let refs = [];
                   const addRef = (parsedArr, lName) => {
                     parsedArr.forEach((poly, polyIdx) => {
@@ -1159,29 +1197,29 @@ const Results = ({ globals }) => {
                   return (
                     <CADSketcher 
                       ref={cadRef}
-                      sketches={draftCad.sketches} 
+                      sketches={activeCad.sketches} 
                       setSketches={(v) => {
-                         const updated = typeof v === 'function' ? v(draftCad.sketches) : v;
-                         setDraftCad(prev => ({ ...prev, sketches: updated }));
+                         const updated = typeof v === 'function' ? v(activeCad.sketches) : v;
+                         setActiveCad(prev => ({ ...prev, sketches: updated }));
                       }} 
-                      dimensions={draftCad.dimensions}
+                      dimensions={activeCad.dimensions}
                       setDimensions={(v) => {
-                         const updated = typeof v === 'function' ? v(draftCad.dimensions) : v;
-                         setDraftCad(prev => ({ ...prev, dimensions: updated }));
+                         const updated = typeof v === 'function' ? v(activeCad.dimensions) : v;
+                         setActiveCad(prev => ({ ...prev, dimensions: updated }));
                       }}
-                      fixedPoints={draftCad.fixedPoints}
+                      fixedPoints={activeCad.fixedPoints}
                       setFixedPoints={(v) => {
-                         const updated = typeof v === 'function' ? v(draftCad.fixedPoints) : v;
-                         setDraftCad(prev => ({ ...prev, fixedPoints: updated }));
+                         const updated = typeof v === 'function' ? v(activeCad.fixedPoints) : v;
+                         setActiveCad(prev => ({ ...prev, fixedPoints: updated }));
                       }}
-                      constraints={draftCad.constraints}
+                      constraints={activeCad.constraints}
                       setConstraints={(v) => {
-                         const updated = typeof v === 'function' ? v(draftCad.constraints) : v;
-                         setDraftCad(prev => ({ ...prev, constraints: updated }));
+                         const updated = typeof v === 'function' ? v(activeCad.constraints) : v;
+                         setActiveCad(prev => ({ ...prev, constraints: updated }));
                       }}
                       referenceVertices={refs}
                        pushToHistory={() => {
-                         setCadHistory(prev => [JSON.stringify(draftCad), ...prev].slice(0, 30));
+                         setActiveUndoHistory(prev => [JSON.stringify(activeCad), ...prev].slice(0, 30));
                        }}
                       scale={scale} 
                       SCALE_M={SCALE_M} 

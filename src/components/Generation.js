@@ -87,17 +87,9 @@ const Generation = ({ globals }) => {
       if (!c.enabled) return;
 
       const levels = parseInt(c.levels) || 1;
-      const vMax = parseFloat(c.v) || 0;
-      const vMin = parseFloat(c.minV) || 0;
-      const vW   = parseFloat(c.w) || 0;
-      const vRevMax = parseFloat(c.revV) || 0;
-
-      // Actual step calculation: from minV to vMax in 'levels' segments
-      const vRange = vMax - vMin;
-      const vStep = levels > 0 ? vRange / levels : 0;
-      
-      const vRevRange = vRevMax - vMin;
-      const vRevStep = levels > 0 ? vRevRange / levels : 0;
+      const vMax = Math.abs(parseFloat(c.v)) || 0;
+      const vW   = Math.abs(parseFloat(c.w)) || 0;
+      const vRevMax = Math.abs(parseFloat(c.revV)) || 0;
 
       // 1. Handle In-Place Rotation / Idle (v=0)
       if (c.idle) {
@@ -108,28 +100,30 @@ const Generation = ({ globals }) => {
         newCases.push({ id: idCounter++, load, v: 0.0, w: parseFloat((-vW).toFixed(2)), custom_dxf: null, type: 'std' });
       }
 
-      // 2. Generate levels
-      for (let i = 0; i <= levels; i++) {
-        const currV = parseFloat((vMin + i * vStep).toFixed(2));
-        const currRevV = parseFloat((vMin + i * vRevStep).toFixed(2));
-        
-        // Skip v=0 here if it was already handled by IP or if it's the start of the loop
-        if (currV === 0 && c.ip) continue;
+      // 2. Generate levels evenly across the enabled range
+      const minBound = c.rev ? -vRevMax : 0;
+      const maxBound = vMax;
+      const vRange = maxBound - minBound;
+      const vStep = levels > 0 ? vRange / levels : 0;
 
-        if (c.fwd) {
-          newCases.push({ id: idCounter++, load, v: currV, w: 0.0, custom_dxf: null, type: 'std' });
-          if (c.rev) {
-            newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: 0.0, custom_dxf: null, type: 'std' });
+      for (let i = 0; i <= levels; i++) {
+        const currV = parseFloat((minBound + i * vStep).toFixed(3));
+        
+        // Skip exactly 0, as idle and ip cover it
+        if (Math.abs(currV) < 1e-4) continue;
+
+        if (currV > 0) {
+          if (c.fwd) {
+            newCases.push({ id: idCounter++, load, v: currV, w: 0.0, custom_dxf: null, type: 'std' });
           }
-        }
-        if (c.turn) {
-          const wVal = parseFloat(vW.toFixed(2));
-          newCases.push({ id: idCounter++, load, v: currV, w: wVal, custom_dxf: null, type: 'std' });
-          newCases.push({ id: idCounter++, load, v: currV, w: parseFloat((-wVal).toFixed(2)), custom_dxf: null, type: 'std' });
-          
+          if (c.turn) {
+            const wVal = parseFloat(vW.toFixed(2));
+            newCases.push({ id: idCounter++, load, v: currV, w: wVal, custom_dxf: null, type: 'std' });
+            newCases.push({ id: idCounter++, load, v: currV, w: parseFloat((-wVal).toFixed(2)), custom_dxf: null, type: 'std' });
+          }
+        } else if (currV < 0) {
           if (c.rev) {
-            newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: wVal, custom_dxf: null, type: 'std' });
-            newCases.push({ id: idCounter++, load, v: parseFloat((-currRevV).toFixed(2)), w: parseFloat((-wVal).toFixed(2)), custom_dxf: null, type: 'std' });
+            newCases.push({ id: idCounter++, load, v: currV, w: 0.0, custom_dxf: null, type: 'std' });
           }
         }
       }
@@ -159,13 +153,33 @@ const Generation = ({ globals }) => {
     ['NoLoad', 'Load1', 'Load2'].forEach(load => {
        if (!genConfig[load].enabled) return;
        const c = genConfig[load];
-       // Modes per level: (fwd:1 + turn:2) * (rev:2 if rev else 1)
-       const modesPerLevel = ((c.fwd ? 1 : 0) + (c.turn ? 2 : 0)) * (c.rev ? 2 : 1);
-       if (modesPerLevel === 0) return;
+       const fwdCasesPerV = (c.fwd ? 1 : 0) + (c.turn ? 2 : 0);
+       const revCasesPerV = c.rev ? 1 : 0;
+       if (fwdCasesPerV === 0 && revCasesPerV === 0) return;
        
+       const maxBound = Math.abs(parseFloat(c.v)) || 0;
+       const minBound = c.rev ? -(Math.abs(parseFloat(c.revV)) || 0) : 0;
+       const vRange = maxBound - minBound;
+       if (vRange <= 0) return;
+
        const ipCount = (c.ip ? 2 : 0) + (c.idle ? 1 : 0);
        
-       const calculatedLevels = Math.floor((budgetPerLoad - ipCount) / modesPerLevel) - 1;
+       let calculatedLevels = 1;
+       while (calculatedLevels < 50) {
+         let count = ipCount;
+         const step = vRange / calculatedLevels;
+         for (let i = 0; i <= calculatedLevels; i++) {
+           const currV = parseFloat((minBound + i * step).toFixed(3));
+           if (Math.abs(currV) < 1e-4) continue;
+           if (currV > 0) count += fwdCasesPerV;
+           else if (currV < 0) count += revCasesPerV;
+         }
+         if (count > budgetPerLoad) {
+           calculatedLevels--;
+           break;
+         }
+         calculatedLevels++;
+       }
        handleGenConfigChange(load, 'levels', Math.max(0, calculatedLevels));
     });
     alert(`Generation levels adjusted to fit hardware capacity (${maxFields} fields).`);
@@ -323,16 +337,24 @@ const Generation = ({ globals }) => {
                 </tr>
                 <tr>
                   <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>Hull Threshold (m)</td>
-                  {['NoLoad', 'Load1', 'Load2'].map(load => (
-                    <td key={load} style={{ padding: '0 4px' }}>
-                      <ModernInput
-                        value={physics[load].hull_threshold || 0.5}
-                        onChange={e => handlePhysicsChange(load, 'hull_threshold', e.target.value)}
-                        disabled={load !== 'NoLoad' && !physics[load].enabled}
-                        style={{ opacity: (load !== 'NoLoad' && !physics[load].enabled) ? 0.2 : 1 }}
-                      />
-                    </td>
-                  ))}
+                  {['NoLoad', 'Load1', 'Load2'].map(load => {
+                    const isHybrid = physics[load].field_method === 'hybrid';
+                    const disabled = (load !== 'NoLoad' && !physics[load].enabled) || !isHybrid;
+                    return (
+                      <td key={load} style={{ padding: '0 4px', textAlign: 'center' }}>
+                        {!isHybrid ? (
+                          <span style={{ color: '#333', fontSize: '0.65rem' }}>N/A</span>
+                        ) : (
+                          <ModernInput
+                            value={physics[load].hull_threshold || 0.5}
+                            onChange={e => handlePhysicsChange(load, 'hull_threshold', e.target.value)}
+                            disabled={disabled}
+                            style={{ opacity: disabled ? 0.2 : 1 }}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
                 {/* Checkbox rows */}
                 {[
@@ -409,7 +431,6 @@ const Generation = ({ globals }) => {
                   { lbl: 'Intensity Levels', k: 'levels' },
                   { lbl: 'Max Fwd v (m/s)', k: 'v' },
                   { lbl: 'Max Rev v (m/s)', k: 'revV' },
-                  { lbl: 'Min v (m/s)', k: 'minV' },
                   { lbl: 'Max Ang w (rad/s)', k: 'w' },
                 ].map(row => (
                   <tr key={row.k}>
@@ -435,7 +456,7 @@ const Generation = ({ globals }) => {
                   </td>
                   {['NoLoad', 'Load1', 'Load2'].map(load => {
                     const c = genConfig[load];
-                    const vRange = (parseFloat(c.v) || 0) - (parseFloat(c.minV) || 0);
+                    const vRange = (c.rev ? (Math.abs(parseFloat(c.revV)) || 0) : 0) + (Math.abs(parseFloat(c.v)) || 0);
                     const step = (parseInt(c.levels) || 1) > 0 ? vRange / (parseInt(c.levels) || 1) : 0;
                     return (
                       <td key={load} style={{ textAlign: 'center', color: '#888', fontSize: '0.7rem', fontWeight: 700 }}>
@@ -453,7 +474,7 @@ const Generation = ({ globals }) => {
                 </tr>
                 {/* Motion checkboxes */}
                 {[
-                  { lbl: 'Forward Linear', k: 'fwd' },
+                  { lbl: 'Straight / Linear', k: 'fwd' },
                   { lbl: 'Curve / Turn', k: 'turn' },
                   { lbl: 'In-place Rotate', k: 'ip' },
                   { lbl: 'Idle (Stop)', k: 'idle' },

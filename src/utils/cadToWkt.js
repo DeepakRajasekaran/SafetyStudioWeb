@@ -108,6 +108,28 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
       ]);
       return [[pts]]; // MultiPolygon
     }
+    if (sketch.type === 'sector') {
+      const [cx, cy] = sketch.center;
+      const r = sketch.radius;
+      const startAngle = sketch.startAngle;
+      const sweepAngle = sketch.sweepAngle;
+      const segments = 64; 
+      const pts = [];
+      
+      // Center point
+      pts.push([parseFloat((cx / SCALE_M).toFixed(6)), parseFloat((-cy / SCALE_M).toFixed(6))]);
+      
+      // Arc points
+      const numArcPoints = Math.max(3, Math.ceil(segments * (Math.abs(sweepAngle) / (2 * Math.PI))));
+      for (let i = 0; i <= numArcPoints; i++) {
+          const theta = startAngle + (i / numArcPoints) * sweepAngle;
+          const x = (cx + r * Math.cos(theta)) / SCALE_M;
+          const y = (- (cy + r * Math.sin(theta))) / SCALE_M;
+          pts.push([parseFloat(x.toFixed(6)), parseFloat(y.toFixed(6))]);
+      }
+      pts.push(pts[0]); // close loop
+      return [[pts]];
+    }
     return null;
   };
 
@@ -140,14 +162,14 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
 
   const additive = [
     // 1. Standard shapes (robust handling)
-    ...additiveSketches.filter(s => s.type === 'circle' || s.type === 'rect').map(getPolyCoords).filter(Boolean),
+    ...additiveSketches.filter(s => s.type === 'circle' || s.type === 'rect' || s.type === 'sector').map(getPolyCoords).filter(Boolean),
     // 2. Custom line loops
     ...linesToPolys(allAdditiveLines)
   ];
 
   const subtractive = [
     // 1. Standard shapes (robust handling)
-    ...subtractiveSketches.filter(s => s.type === 'circle' || s.type === 'rect').map(getPolyCoords).filter(Boolean),
+    ...subtractiveSketches.filter(s => s.type === 'circle' || s.type === 'rect' || s.type === 'sector').map(getPolyCoords).filter(Boolean),
     // 2. Custom line loops
     ...linesToPolys(allSubtractiveLines)
   ];
@@ -161,12 +183,15 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
 
   try {
     // 1. Union all additive shapes, or initialize empty if none
-    let result = additive.length > 0 ? union(...additive) : [];
+    const hasAdditive = additive.length > 0;
+    let result = hasAdditive ? union(...additive) : [];
 
     // 2. Iteratively subtract removal shapes
     subtractive.forEach(subPoly => {
-      if (result.length > 0) {
-        result = difference(result, subPoly);
+      if (hasAdditive) {
+        if (result.length > 0) {
+          result = difference(result, subPoly);
+        }
       } else {
         // If no additive shapes, the union of subtractive shapes themselves becomes the result
         // This is useful for callers like Results.js that perform their own secondary booleans
