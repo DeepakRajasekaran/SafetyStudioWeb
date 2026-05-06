@@ -15,8 +15,6 @@ const ImageCarousel = ({ images, interval = 6000 }) => {
 
   const handleManualControl = (index) => {
     setActiveIndex(index);
-    // The useEffect dependency on activeIndex will naturally "reset" the interval 
-    // because the previous interval is cleared and a new one starts from the new index.
   };
 
   return (
@@ -62,9 +60,8 @@ const Help = () => {
 
   const matrixImages = [
     { src: '/help/manual/physics_and_matrix_generator1.png', title: 'Physics Config', alt: 'Physics', caption: 'Setting deceleration and reaction time parameters.' },
-    { src: '/help/manual/physics_and_matrix_generator2.png', title: 'Generation Config', alt: 'Gen Config', caption: 'Selecting motion types and intensity levels.' },
-    { src: '/help/manual/physics_and_matrix_generator3.png', title: 'Field Methodology', alt: 'Methodology', caption: 'Choosing between Sweep Union and Hybrid generation.' },
-    { src: '/help/manual/physics_and_matrix_generator4.png', title: 'Shadow Toggle', alt: 'Shadows', caption: 'Enabling shadow analysis for specific load cases.' },
+    { src: '/help/manual/physics_and_matrix_generator2.png', title: 'Generation Config', alt: 'Gen Config', caption:  'Choosing methodology (Sweep Union vs Hybrid) and enabling shadow generation.'},
+    { src: '/help/manual/physics_and_matrix_generator3.png', title: 'Field Methodology', alt: 'Methodology', caption: 'Selecting motion types and intensity levels.' },
     { src: '/help/manual/generated_cases_from_evalMatrix.png', title: 'Generated Cases', alt: 'Cases', caption: 'The finalized library of motion profiles.' }
   ];
 
@@ -97,19 +94,20 @@ const Help = () => {
           <div className="toc-sub">
             <a href="#geometry-flow">3.1. Geometry Workflow</a>
             <a href="#sketching">3.2. CAD Sketching</a>
+            <a href="#sensor-config">3.3. Sensor Configuration</a>
           </div>
           <a href="#phase2-matrix">4. Phase 2: Matrix & Generation</a>
           <div className="toc-sub">
-            <a href="#matrix-flow">4.1. Case Generation</a>
-            <a href="#shadow-mgmt">4.2. Shadow Analysis</a>
+            <a href="#matrix-config">4.1. Matrix Configuration & Case Generation</a>
           </div>
           <a href="#phase3-results">5. Phase 3: Results & Validation</a>
           <div className="toc-sub">
-            <a href="#poly-edit">5.1. Polygon Editing</a>
-            <a href="#cad-refinement">5.2. CAD Refinement</a>
-            <a href="#shadow-view">5.3. Shadow Visualization</a>
+            <a href="#mask-mgmt">5.1. Global Mask Management</a>
+            <a href="#poly-edit">5.2. Polygon Editing</a>
+            <a href="#cad-refinement">5.3. CAD Refinement</a>
+            <a href="#shadow-gen">5.4. Shadow Generation</a>
           </div>
-          <a href="#phase4-mask">6. Phase 4: Mask Management</a>
+          <a href="#phase4-export">6. Phase 4: Hardware Export</a>
         </nav>
       </div>
 
@@ -144,17 +142,15 @@ const Help = () => {
         <hr className="doc-divider" />
 
         <div id="phase1-editor" className="help-doc-section">
-          <h2>Phase 3: Editor & Geometry Foundation</h2>
+          <h2>Phase 1: Editor & Geometry Foundation</h2>
           <p>
             Define the physical robot and its environment. The Editor supports multiple layers: 
             Footprint, Load 1, and Load 2.
           </p>
-          
-          <ImageCarousel images={geometryImages} />
 
           <h3 id="geometry-flow">3.1. Geometry Workflow</h3>
           <p>
-            Start with the <strong>Footprint</strong> to define the base robot. Then, add <strong>Loads</strong> 
+            Start with the <strong>Footprint</strong> to define the base robot. Then, add <strong>Loads</strong>  
             which represent payloads. These loads are critical for calculating sensor shadows.
           </p>
 
@@ -162,60 +158,79 @@ const Help = () => {
           <p>
             The CAD Editor provides professional sketching tools to define complex robot shapes.
           </p>
+
+          <ImageCarousel images={geometryImages} />
+
           <div className="screenshot-container">
             <img src="/help/manual/example_footprint_load_defined.png" alt="Defined State" />
             <p className="screenshot-caption">Complete Setup: Footprint and Loads fully defined.</p>
+          </div>
+
+          <h3 id="sensor-config">3.3. Sensor Configuration</h3>
+          <p>
+            Precisely define the mounting position (X, Y) and orientation (Angle) of each LiDAR sensor 
+            relative to the robot's base link origin. You must also specify the <strong>Max Fields</strong> 
+            configurable for your specific hardware.
+          </p>
+          <div className="screenshot-container">
+            <img src="/help/manual/lidarManager.png" alt="LiDAR Config" />
+            <p className="screenshot-caption">LiDAR Manager: Configuring sensor placement and rotation constraints.</p>
           </div>
         </div>
 
         <hr className="doc-divider" />
 
         <div id="phase2-matrix" className="help-doc-section">
-          <h2>Phase 4: Matrix & Case Generation</h2>
+          <h2>Phase 2: Matrix & Case Generation</h2>
           <p>
             Configure the physics and generate all necessary motion cases.
           </p>
           
           <ImageCarousel images={matrixImages} />
 
-          <h3 id="matrix-flow">4.1. Automated Generation</h3>
+          <h3 id="matrix-config">4.1. Matrix Configuration & Case Generation</h3>
           <p>
-            The <strong>Evaluation Matrix</strong> allows you to specify velocity steps and 
-            motion types. Click <strong>Generate All Cases</strong> to populate the library 
-            automatically based on your constraints.
-          </p>
-
-          <h3 id="shadow-mgmt">4.2. Shadow Analysis</h3>
-          <p>
-            Configure how payloads obstruct sensor visibility by toggling shadow zones per load.
+            The <strong>Evaluation Matrix</strong> serves as the central hub for defining the robot's dynamic safety constraints. 
+            This phase involves configuring critical <strong>Physics parameters</strong> (deceleration, reaction time), 
+            selecting the <strong>Generation Methodology</strong> (Sweep Union vs Hybrid), and enabling 
+            <strong>Shadow Generation</strong> to account for physical obstructions caused by the payload. Once the 
+            constraints are set, the system automatically generates a complete library of motion profiles, 
+            populating the matrix with validated safety cases ready for inspection.
           </p>
         </div>
 
         <hr className="doc-divider" />
 
         <div id="phase3-results" className="help-doc-section">
-          <h2>Phase 5: Results & Validation</h2>
+          <h2>Phase 3: Results & Validation</h2>
           <p>
             Inspect and refine the generated safety fields.
           </p>
 
-          <h3 id="poly-edit">5.1. Manual Polygon Editing</h3>
+          <h3 id="mask-mgmt">5.1. Global Mask Management</h3>
+          <p>
+            Define exclusion zones that apply to all generated cases. Masks are used to hide 
+            static robot parts from the sensors' field of view.
+          </p>
+          <ImageCarousel images={maskImages} />
+
+          <h3 id="poly-edit">5.2. Manual Polygon Editing</h3>
           <p>
             Drag individual vertices to adjust the field boundary. You can also add new points by clicking 
             between existing ones or remove them to simplify the shape.
           </p>
           <ImageCarousel images={polygonEditImages} />
 
-          <h3 id="cad-refinement">5.2. CAD-Based Refinement</h3>
+          <h3 id="cad-refinement">5.3. CAD-Based Refinement</h3>
           <p>
             Use parametric CAD tools to "patch" regions of the field. This supports Union (adding area) 
             and Subtraction (carving out area).
           </p>
           <ImageCarousel images={cadEditImages} />
 
-          <h3 id="shadow-view">5.3. Shadow Visualization</h3>
+          <h3 id="shadow-gen">5.4. Shadow Generation Visualization</h3>
           <p>
-            The system automatically calculates <strong>Shadow Zones</strong> (Red) where 
+            The system automatically performs <strong>Shadow Generation</strong> (Red) where 
             the load obstructs the sensor's line of sight.
           </p>
           <div className="screenshot-container">
@@ -226,12 +241,15 @@ const Help = () => {
 
         <hr className="doc-divider" />
 
-        <div id="phase4-mask" className="help-doc-section">
-          <h2>Phase 4: Global Mask Management</h2>
+        <div id="phase4-export" className="help-doc-section">
+          <h2>Phase 4: Hardware Export</h2>
           <p>
-            Define exclusion zones that apply to all generated cases.
+            Once validated, export your fieldsets to hardware-ready formats for your specific scanner models.
           </p>
-          <ImageCarousel images={maskImages} />
+          <div className="screenshot-container">
+            <img src="/help/manual/hardwareExport.png" alt="Hardware Export" />
+            <p className="screenshot-caption">Hardware Manager: Reviewing and exporting the final safety field matrix.</p>
+          </div>
         </div>
 
         <div className="help-footer-official">
