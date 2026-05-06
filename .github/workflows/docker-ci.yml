@@ -1,0 +1,83 @@
+name: Docker CI/CD and Release
+
+on:
+  push:
+    branches: [ "main" ]
+    tags: [ "v*" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Docker Hub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: |
+            deepakrajasekaran/safetystudioweb
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+
+      - name: Build and push Backend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.backend
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            deepakrajasekaran/safetystudioweb:backend-latest
+            ${{ github.ref_type == 'tag' && format('deepakrajasekaran/safetystudioweb:backend-{0}', github.ref_name) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push Frontend
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile.frontend
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: |
+            deepakrajasekaran/safetystudioweb:frontend-latest
+            ${{ github.ref_type == 'tag' && format('deepakrajasekaran/safetystudioweb:frontend-{0}', github.ref_name) || '' }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export Images as Tarballs (Only on Release Tags)
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          docker pull deepakrajasekaran/safetystudioweb:backend-${{ github.ref_name }}
+          docker pull deepakrajasekaran/safetystudioweb:frontend-${{ github.ref_name }}
+          docker save -o safetystudio_backend_${{ github.ref_name }}.tar deepakrajasekaran/safetystudioweb:backend-${{ github.ref_name }}
+          docker save -o safetystudio_frontend_${{ github.ref_name }}.tar deepakrajasekaran/safetystudioweb:frontend-${{ github.ref_name }}
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            safetystudio_backend_${{ github.ref_name }}.tar
+            safetystudio_frontend_${{ github.ref_name }}.tar
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
