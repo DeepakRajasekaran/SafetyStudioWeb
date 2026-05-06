@@ -46,7 +46,7 @@ jobs:
           file: ./Dockerfile.backend
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            deepakrajasekaran/safetystudioweb:backend-latest
+            deepakrajasekaran/safetystudioweb:backend
             ${{ github.ref_type == 'tag' && format('deepakrajasekaran/safetystudioweb:backend-{0}', github.ref_name) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -58,7 +58,7 @@ jobs:
           file: ./Dockerfile.frontend
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            deepakrajasekaran/safetystudioweb:frontend-latest
+            deepakrajasekaran/safetystudioweb:frontend
             ${{ github.ref_type == 'tag' && format('deepakrajasekaran/safetystudioweb:frontend-{0}', github.ref_name) || '' }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
