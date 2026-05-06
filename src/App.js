@@ -214,7 +214,7 @@ function App() {
     maxFields, setMaxFields,
     genConfig, setGenConfig,
     genSync, setGenSync,
-    cadData, setCadFieldSafe, setCadBatchSafe,
+    cadData, setCadData, setCadFieldSafe, setCadBatchSafe,
     undo, pushToHistory,
     clearSession,
     activeTool, setActiveTool,

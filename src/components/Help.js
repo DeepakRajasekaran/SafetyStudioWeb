@@ -92,23 +92,24 @@ const Help = () => {
         <h2 className="toc-title">User Manual</h2>
         <nav className="toc-nav">
           <a href="#introduction">1. Introduction</a>
-          <a href="#phase1-editor">2. Phase 1: Editor & Geometry</a>
+          <a href="#tutorial">2. Video Tutorial</a>
+          <a href="#phase1-editor">3. Phase 1: Editor & Geometry</a>
           <div className="toc-sub">
-            <a href="#geometry-flow">2.1. Geometry Workflow</a>
-            <a href="#sketching">2.2. CAD Sketching</a>
+            <a href="#geometry-flow">3.1. Geometry Workflow</a>
+            <a href="#sketching">3.2. CAD Sketching</a>
           </div>
-          <a href="#phase2-matrix">3. Phase 2: Matrix & Generation</a>
+          <a href="#phase2-matrix">4. Phase 2: Matrix & Generation</a>
           <div className="toc-sub">
-            <a href="#matrix-flow">3.1. Case Generation</a>
-            <a href="#shadow-mgmt">3.2. Shadow Analysis</a>
+            <a href="#matrix-flow">4.1. Case Generation</a>
+            <a href="#shadow-mgmt">4.2. Shadow Analysis</a>
           </div>
-          <a href="#phase3-results">4. Phase 3: Results & Validation</a>
+          <a href="#phase3-results">5. Phase 3: Results & Validation</a>
           <div className="toc-sub">
-            <a href="#poly-edit">4.1. Polygon Editing</a>
-            <a href="#cad-refinement">4.2. CAD Refinement</a>
-            <a href="#shadow-view">4.3. Shadow Visualization</a>
+            <a href="#poly-edit">5.1. Polygon Editing</a>
+            <a href="#cad-refinement">5.2. CAD Refinement</a>
+            <a href="#shadow-view">5.3. Shadow Visualization</a>
           </div>
-          <a href="#phase4-mask">5. Phase 4: Mask Management</a>
+          <a href="#phase4-mask">6. Phase 4: Mask Management</a>
         </nav>
       </div>
 
@@ -122,10 +123,28 @@ const Help = () => {
           </p>
         </div>
 
+        <div id="tutorial" className="help-doc-section">
+          <h2>Video Tutorial</h2>
+          <p>
+            Watch our end-to-end tutorial to see Safety Studio in action. This video covers the 
+            complete workflow from initial geometry setup to hardware export.
+          </p>
+          <div className="video-player-container">
+            <video 
+              controls 
+              className="tutorial-video"
+              poster="/help/manual/results_page.png"
+            >
+              <source src="/tutorial.mp4" type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+
         <hr className="doc-divider" />
 
         <div id="phase1-editor" className="help-doc-section">
-          <h2>Phase 1: Editor & Geometry Foundation</h2>
+          <h2>Phase 3: Editor & Geometry Foundation</h2>
           <p>
             Define the physical robot and its environment. The Editor supports multiple layers: 
             Footprint, Load 1, and Load 2.
@@ -133,13 +152,13 @@ const Help = () => {
           
           <ImageCarousel images={geometryImages} />
 
-          <h3 id="geometry-flow">2.1. Geometry Workflow</h3>
+          <h3 id="geometry-flow">3.1. Geometry Workflow</h3>
           <p>
             Start with the <strong>Footprint</strong> to define the base robot. Then, add <strong>Loads</strong> 
             which represent payloads. These loads are critical for calculating sensor shadows.
           </p>
 
-          <h3 id="sketching">2.2. CAD Sketching</h3>
+          <h3 id="sketching">3.2. CAD Sketching</h3>
           <p>
             The CAD Editor provides professional sketching tools to define complex robot shapes.
           </p>
@@ -152,21 +171,21 @@ const Help = () => {
         <hr className="doc-divider" />
 
         <div id="phase2-matrix" className="help-doc-section">
-          <h2>Phase 2: Matrix & Case Generation</h2>
+          <h2>Phase 4: Matrix & Case Generation</h2>
           <p>
             Configure the physics and generate all necessary motion cases.
           </p>
           
           <ImageCarousel images={matrixImages} />
 
-          <h3 id="matrix-flow">3.1. Automated Generation</h3>
+          <h3 id="matrix-flow">4.1. Automated Generation</h3>
           <p>
             The <strong>Evaluation Matrix</strong> allows you to specify velocity steps and 
             motion types. Click <strong>Generate All Cases</strong> to populate the library 
             automatically based on your constraints.
           </p>
 
-          <h3 id="shadow-mgmt">3.2. Shadow Analysis</h3>
+          <h3 id="shadow-mgmt">4.2. Shadow Analysis</h3>
           <p>
             Configure how payloads obstruct sensor visibility by toggling shadow zones per load.
           </p>
@@ -175,26 +194,26 @@ const Help = () => {
         <hr className="doc-divider" />
 
         <div id="phase3-results" className="help-doc-section">
-          <h2>Phase 3: Results & Validation</h2>
+          <h2>Phase 5: Results & Validation</h2>
           <p>
             Inspect and refine the generated safety fields.
           </p>
 
-          <h3 id="poly-edit">4.1. Manual Polygon Editing</h3>
+          <h3 id="poly-edit">5.1. Manual Polygon Editing</h3>
           <p>
             Drag individual vertices to adjust the field boundary. You can also add new points by clicking 
             between existing ones or remove them to simplify the shape.
           </p>
           <ImageCarousel images={polygonEditImages} />
 
-          <h3 id="cad-refinement">4.2. CAD-Based Refinement</h3>
+          <h3 id="cad-refinement">5.2. CAD-Based Refinement</h3>
           <p>
             Use parametric CAD tools to "patch" regions of the field. This supports Union (adding area) 
             and Subtraction (carving out area).
           </p>
           <ImageCarousel images={cadEditImages} />
 
-          <h3 id="shadow-view">4.3. Shadow Visualization</h3>
+          <h3 id="shadow-view">5.3. Shadow Visualization</h3>
           <p>
             The system automatically calculates <strong>Shadow Zones</strong> (Red) where 
             the load obstructs the sensor's line of sight.
@@ -216,7 +235,7 @@ const Help = () => {
         </div>
 
         <div className="help-footer-official">
-          Safety Studio &bull; Professional Engineering Documentation &bull; 2026
+          Safety Studio &bull; Documentation &bull; 2026
         </div>
       </div>
     </div>

@@ -5,6 +5,9 @@ const Home = ({ globals, setActiveTab }) => {
   const { 
     geometry, sensors, setSensors, physics, evaluationCases, results, 
     fieldsets, setGeometry, setPhysics, setEvaluationCases, setResults, setFieldsets,
+    cadData, setCadData, setCadFieldSafe,
+    maxFields, setMaxFields,
+    genConfig, setGenConfig,
     clearSession 
   } = globals;
   const [model, setModel] = useState("Sick Nanoscan3Pro");
