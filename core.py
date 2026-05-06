@@ -169,7 +169,7 @@ class SafetyMath:
                 raw_footprint_poly = scale(raw_footprint_poly, xfact=lat_scale, yfact=1.0, origin=(0,0))
             
             if load_poly and P.get('include_load', True):
-                unpadded_geom = unary_union([raw_footprint_poly, load_poly]).convex_hull
+                unpadded_geom = unary_union([raw_footprint_poly, load_poly])
             else:
                 unpadded_geom = raw_footprint_poly
 
