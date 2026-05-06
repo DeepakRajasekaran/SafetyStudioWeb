@@ -99,6 +99,7 @@
   margin-top: 100px;
   margin-bottom: 24px;
   letter-spacing: -0.02em;
+  scroll-margin-top: 40px;
 }
 
 .help-doc-section h3 {
@@ -107,6 +108,7 @@
   color: #2563eb;
   margin-top: 56px;
   margin-bottom: 16px;
+  scroll-margin-top: 40px;
 }
 
 .help-doc-section p {

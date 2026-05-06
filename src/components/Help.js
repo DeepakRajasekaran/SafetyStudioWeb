@@ -3,16 +3,28 @@ import './Help.css';
 
 const ImageCarousel = ({ images, interval = 6000 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
+  const [isPaused, setIsPaused] = useState(false);
 
   useEffect(() => {
+    if (isPaused) return;
     const timer = setInterval(() => {
       setActiveIndex((prev) => (prev + 1) % images.length);
     }, interval);
     return () => clearInterval(timer);
-  }, [images.length, interval]);
+  }, [images.length, interval, isPaused, activeIndex]);
+
+  const handleManualControl = (index) => {
+    setActiveIndex(index);
+    // The useEffect dependency on activeIndex will naturally "reset" the interval 
+    // because the previous interval is cleared and a new one starts from the new index.
+  };
 
   return (
-    <div className="carousel-container">
+    <div 
+      className="carousel-container"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
       <div className="carousel-track" style={{ transform: `translateX(-${activeIndex * 100}%)` }}>
         {images.map((img, idx) => (
           <div key={idx} className="carousel-slide">
@@ -28,12 +40,12 @@ const ImageCarousel = ({ images, interval = 6000 }) => {
           <button
             key={idx}
             className={`carousel-dot ${idx === activeIndex ? 'active' : ''}`}
-            onClick={() => setActiveIndex(idx)}
+            onClick={() => handleManualControl(idx)}
           />
         ))}
       </div>
-      <button className="carousel-control prev" onClick={() => setActiveIndex((prev) => (prev - 1 + images.length) % images.length)}>‹</button>
-      <button className="carousel-control next" onClick={() => setActiveIndex((prev) => (prev + 1) % images.length)}>›</button>
+      <button className="carousel-control prev" onClick={() => handleManualControl((activeIndex - 1 + images.length) % images.length)}>‹</button>
+      <button className="carousel-control next" onClick={() => handleManualControl((activeIndex + 1) % images.length)}>›</button>
     </div>
   );
 };
@@ -126,6 +138,11 @@ const Help = () => {
             Start with the <strong>Footprint</strong> to define the base robot. Then, add <strong>Loads</strong> 
             which represent payloads. These loads are critical for calculating sensor shadows.
           </p>
+
+          <h3 id="sketching">2.2. CAD Sketching</h3>
+          <p>
+            The CAD Editor provides professional sketching tools to define complex robot shapes.
+          </p>
           <div className="screenshot-container">
             <img src="/help/manual/example_footprint_load_defined.png" alt="Defined State" />
             <p className="screenshot-caption">Complete Setup: Footprint and Loads fully defined.</p>
@@ -147,6 +164,11 @@ const Help = () => {
             The <strong>Evaluation Matrix</strong> allows you to specify velocity steps and 
             motion types. Click <strong>Generate All Cases</strong> to populate the library 
             automatically based on your constraints.
+          </p>
+
+          <h3 id="shadow-mgmt">3.2. Shadow Analysis</h3>
+          <p>
+            Configure how payloads obstruct sensor visibility by toggling shadow zones per load.
           </p>
         </div>
 
