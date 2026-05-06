@@ -6,23 +6,31 @@ const Help = () => {
     <div className="help-page-container">
       {/* Table of Contents Sidebar */}
       <div className="help-sidebar">
-        <h2 className="toc-title">Table of Contents</h2>
+        <h2 className="toc-title">User Manual</h2>
         <nav className="toc-nav">
           <a href="#introduction">1. Introduction</a>
-          <a href="#step1-editor">2. Phase 1: Editor (Geometry)</a>
+          <a href="#phase1-editor">2. Phase 1: Editor & CAD</a>
           <div className="toc-sub">
             <a href="#footprint">2.1. Robot Footprint</a>
-            <a href="#load-shapes">2.2. Load Shapes</a>
-            <a href="#sensors">2.3. Sensor Mounting</a>
+            <a href="#sketching">2.2. Advanced Sketching</a>
+            <a href="#constraints">2.3. Constraints & Dims</a>
+            <a href="#booleans">2.4. Boolean Operations</a>
+            <a href="#sensors">2.5. Sensor Mounting</a>
           </div>
-          <a href="#step2-matrix">3. Phase 2: Matrix (Generation)</a>
+          <a href="#phase2-matrix">3. Phase 2: Eval Matrix</a>
           <div className="toc-sub">
             <a href="#physics">3.1. Physics Engine</a>
-            <a href="#gen-params">3.2. Generation Parameters</a>
-            <a href="#populating">3.3. Case Population</a>
+            <a href="#generation">3.2. Matrix Generation</a>
           </div>
-          <a href="#step3-results">4. Phase 3: Results (Validation)</a>
-          <a href="#step4-hardware">5. Phase 4: Hardware (Export)</a>
+          <a href="#phase3-results">4. Phase 3: Results & Validation</a>
+          <div className="toc-sub">
+            <a href="#views">4.1. View Modes</a>
+            <a href="#shadows">4.2. Shadow Analysis</a>
+            <a href="#poly-edit">4.3. Polygon Editing</a>
+            <a href="#result-cad">4.4. Result CAD & Unions</a>
+            <a href="#masking">4.5. Lidar Masking</a>
+          </div>
+          <a href="#phase4-hardware">5. Phase 4: Hardware Export</a>
         </nav>
       </div>
 
@@ -31,324 +39,195 @@ const Help = () => {
         <div id="introduction" className="help-doc-section">
           <h1 className="doc-main-title">Safety Studio User Manual</h1>
           <p className="doc-intro">
-            Safety Studio is a comprehensive CAD and simulation suite designed to automate the creation of <strong>Certified Safety Fields</strong> 
-            for mobile industrial robots (AMRs/AGVs). It bridges the gap between raw kinematic data and hardware-ready fieldset configurations.
+            Safety Studio is a premium engineering environment for designing, simulating, and certifying 
+            LiDAR-based safety fieldsets for autonomous mobile robots. This manual provides a complete 
+            end-to-end workflow from raw geometry to hardware deployment.
           </p>
           <div className="screenshot-container">
-            <img src="/help/help_home.png" alt="Home Screen" />
-            <p className="screenshot-caption">Dashboard: The entry point for managing safety configurations.</p>
+            <img src="/help/help_home.png" alt="Home Dashboard" />
+            <p className="screenshot-caption">The Workspace: Initializing your safety project.</p>
           </div>
         </div>
 
         <hr className="doc-divider" />
 
-        <div id="step1-editor" className="help-doc-section">
-          <h2>Phase 1: The Editor (Defining Geometry)</h2>
+        {/* PHASE 1: EDITOR & CAD */}
+        <div id="phase1-editor" className="help-doc-section">
+          <h2>Phase 1: Editor & CAD Foundation</h2>
           <p>
-            Before generating fields, you must define the physical characteristics of your robot. This happens in the <strong>Editor</strong> tab.
+            The foundation of any safety configuration is the physical geometry of the robot. 
+            The <strong>Editor</strong> tab provides professional-grade CAD tools to define these extents.
           </p>
-          
-          <div className="screenshot-container">
-            <img src="/help/help_editor.png" alt="Editor UI" />
-            <p className="screenshot-caption">The Editor Interface: Managing Footprints, Loads, and Sensors.</p>
-          </div>
 
           <h3 id="footprint">2.1. Robot Footprint</h3>
           <p>
-            The footprint is the base link of your robot. You have two ways to define it:
+            The footprint is the 2D bounding polygon of the robot's base.
           </p>
           <ul>
-            <li><strong>Parametric Sketcher:</strong> Use the built-in CAD tools to draw rectangles, circles, or custom polygons. Apply constraints like <em>Parallel</em> or <em>Perpendicular</em> to ensure geometric accuracy.</li>
-            <li><strong>DXF Import:</strong> Click <em>"Import Footprint"</em> to load a 1:1 scale DXF file. The system will automatically detect loops and generate a simplified polygon for simulation.</li>
+            <li><strong>DXF Import:</strong> Import a standard 1:1 scale DXF. The system automatically detects closed loops.</li>
+            <li><strong>Manual Sketching:</strong> Use the "Draw Manually" option to enter the Parametric CAD environment.</li>
           </ul>
 
-          <h3 id="load-shapes">2.2. Load Shapes</h3>
-          <p>
-            Many robots carry payloads that extend beyond their base footprint. You can define up to two load shapes (<strong>Load 1</strong> and <strong>Load 2</strong>). These are used to calculate "Shadow Zones" and ensure the safety field covers the entire dynamic volume of the robot.
-          </p>
-
-          <h3 id="sensors">2.3. Sensor Mounting</h3>
-          <p>
-            Place your LiDAR sensors (e.g., SICK MicroScan3) on the robot. For each sensor, you must define:
-          </p>
-          <ul>
-            <li><strong>Origin (X, Y):</strong> Offset from the robot's <em>base_link</em> (center of rotation).</li>
-            <li><strong>Mounting Angle:</strong> Horizontal rotation of the sensor.</li>
-            <li><strong>Field of View (FOV):</strong> The active scanning sector (typically 270°).</li>
-          </ul>
-        </div>
-
-        <hr className="doc-divider" />
-
-        <div id="step2-matrix" className="help-doc-section">
-          <h2>Phase 2: The Matrix (Field Generation)</h2>
-          <p>
-            The <strong>Matrix</strong> tab is where the "Physics" meets the "Path". Here you define how the robot moves and how the safety fields should respond.
-          </p>
-
+          <h3 id="sketching">2.2. Advanced Sketching Tools</h3>
+          <p>The CAD environment supports standard geometric primitives:</p>
           <div className="screenshot-container">
-            <img src="/help/help_matrix.png" alt="Matrix UI" />
-            <p className="screenshot-caption">Matrix Tab: Configuring Physics and Motion Cases.</p>
+            <img src="/help/editor_cad.png" alt="CAD Sketcher" />
+            <p className="screenshot-caption">The Parametric CAD Environment: Drawing the Robot Footprint.</p>
           </div>
+          <ul>
+            <li><strong>Line & Rect:</strong> Basic linear extents.</li>
+            <li><strong>Circle & Sector:</strong> Ideal for round robot bases or sweeping sensors.</li>
+            <li><strong>Construction Mode:</strong> Use the "Dash" tool to create geometry that helps alignment but is ignored in the final safety calculation.</li>
+          </ul>
 
-          <h3 id="physics">3.1. Physics Engine Parameters</h3>
-          <p>The safety distance (<strong>D</strong>) is calculated using the standard industrial formula:</p>
-          <div className="math-box">D = (v &times; Tᵣ) + (v² / 2a) + Dₛ</div>
-          
+          <h3 id="constraints">2.3. Constraints & Dimensions</h3>
+          <p>
+            To ensure your robot model is precise, apply <strong>Geometric Constraints</strong>:
+          </p>
           <table className="param-table">
             <thead>
-              <tr><th>Parameter</th><th>Description</th></tr>
+              <tr><th>Constraint</th><th>Description</th></tr>
             </thead>
             <tbody>
-              <tr><td><strong>Reaction Time (Tr)</strong></td><td>Total system latency (Sensor response + PLC + Brake engagement) in seconds.</td></tr>
-              <tr><td><strong>Deceleration (a)</strong></td><td>The worst-case braking capability of the robot in m/s².</td></tr>
-              <tr><td><strong>Safety Margin (Ds)</strong></td><td>Additional buffer distance (e.g., 0.1m) to account for measurement uncertainty.</td></tr>
-              <tr><td><strong>Field Method</strong></td><td>
-                <strong>Sweep Union:</strong> Traditional silhouette merging (fast).<br/>
-                <strong>Convex Hull:</strong> Safest, most conservative bounding box.<br/>
-                <strong>Hybrid:</strong> Automatically switches based on a distance threshold.
-              </td></tr>
-              <tr><td><strong>Lateral Scale</strong></td><td>Scales the width of the field (useful for wide payloads).</td></tr>
+              <tr><td><strong>Coincident</strong></td><td>Merges two points or a point onto a line.</td></tr>
+              <tr><td><strong>Vertical / Horizontal</strong></td><td>Locks lines to the global X or Y axes.</td></tr>
+              <tr><td><strong>Parallel / Perpendicular</strong></td><td>Ensures lines maintain fixed relative angles.</td></tr>
+              <tr><td><strong>Dimensions</strong></td><td>Apply precise numeric values to lengths, radii, and angles.</td></tr>
             </tbody>
           </table>
 
-          <h3 id="gen-params">3.2. Generation Parameters</h3>
-          <p>Define the range of motions you want to cover:</p>
-          <ul>
-            <li><strong>Intensity Levels:</strong> The number of discrete velocity steps between 0 and Max Speed. Higher levels result in smoother transitions but require more hardware fieldsets.</li>
-            <li><strong>Motion Types:</strong> Choose between <em>Linear (Forward)</em>, <em>Curving (Turns)</em>, and <em>In-Place Rotation</em>.</li>
-          </ul>
-
-          <h3 id="populating">3.3. Case Population</h3>
+          <h3 id="booleans">2.4. Boolean Operations (Holes)</h3>
           <p>
-            Click <strong>"Generate All Cases"</strong> to automatically build the list. You can also manually <strong>"Add Misc"</strong> cases or upload a <strong>Custom DXF</strong> for complex, non-kinematic shapes.
+            You can create complex hollow shapes using <strong>Subtraction Mode</strong>. 
+            Any shape drawn while this mode is active will be "cut out" from the main footprint, 
+            allowing you to model internal voids where sensors might be recessed.
+          </p>
+
+          <h3 id="sensors">2.5. Sensor Mounting</h3>
+          <p>
+            LiDAR sensors are mounted relative to the robot's origin. 
+            You must define the <strong>X, Y, and Mounting Angle</strong> accurately. 
+            The <strong>Field of View (FOV)</strong> and <strong>Range (R)</strong> determine the 
+            theoretical coverage before physical obstructions are considered.
           </p>
         </div>
 
         <hr className="doc-divider" />
 
-        <div id="step3-results" className="help-doc-section">
-          <h2>Phase 3: Results & Validation</h2>
+        {/* PHASE 2: EVAL MATRIX */}
+        <div id="phase2-matrix" className="help-doc-section">
+          <h2>Phase 2: Evaluation Matrix & Physics</h2>
           <p>
-            After generation, switch to the <strong>Results</strong> tab to inspect the generated fields.
+            Safety fields are dynamic. The <strong>Evaluation Matrix</strong> defines every velocity 
+            and motion scenario the robot will encounter.
           </p>
-          
-          <div className="screenshot-container">
-            <img src="/help/help_results.png" alt="Results View" />
-            <p className="screenshot-caption">Results View: Inspecting the generated Composite Safety Field.</p>
+
+          <h3 id="physics">3.1. The Physics Engine</h3>
+          <p>
+            The system calculates the stopping distance (<strong>D</strong>) using industrial safety standards:
+          </p>
+          <div className="math-box">D = (v &times; Tᵣ) + (v² / 2a) + Dₛ</div>
+          <div className="tip-box">
+            <strong>Pro Tip:</strong> Tr (Reaction Time) should include the worst-case PLC scan time, 
+            network latency, and mechanical brake delay.
           </div>
 
+          <h3 id="generation">3.2. Matrix Generation</h3>
           <p>
-            Each case is simulated in real-time. The visualizer shows:
+            Instead of manual entry, use the <strong>Matrix Generator</strong> to build thousands of 
+            cases automatically. Define your max linear (V) and angular (W) speeds, set the 
+            <strong>Intensity Levels</strong>, and the system will populate the grid with 
+            standard motion cases (Forward, Turn, Spin-in-place).
           </p>
-          <ul>
-            <li><span style={{color: '#00e5ff'}}>●</span> <strong>Active Field:</strong> The area the sensor will monitor.</li>
-            <li><span style={{color: '#ff4b2b'}}>●</span> <strong>Shadow Zones:</strong> Areas blocked by the robot's own body or payload (automatically excluded).</li>
-            <li><span style={{color: '#ffcc00'}}>●</span> <strong>Trajectory:</strong> The predicted path of the robot during braking.</li>
-          </ul>
+          <div className="screenshot-container">
+            <img src="/help/eval_matrix.png" alt="Evaluation Matrix" />
+            <p className="screenshot-caption">Evaluation Matrix: Managing kinematic scenarios and braking parameters.</p>
+          </div>
         </div>
 
         <hr className="doc-divider" />
 
-        <div id="step4-hardware" className="help-doc-section">
+        {/* PHASE 3: RESULTS & VALIDATION */}
+        <div id="phase3-results" className="help-doc-section">
+          <h2>Phase 3: Results & Advanced Validation</h2>
+          <p>
+            The <strong>Results</strong> tab is where you inspect the generated fieldsets and 
+            manually refine them using advanced tools.
+          </p>
+
+          <h3 id="views">4.1. View Modes</h3>
+          <ul>
+            <li><strong>Composite View:</strong> Shows the merged global safety field.</li>
+            <li><strong>LiDAR View:</strong> Shows the field from the perspective of a specific sensor (local coordinates).</li>
+            <li><strong>Sweeps View:</strong> Visualizes the robot's footprint positions at every step of the braking trajectory.</li>
+          </ul>
+          <div className="screenshot-container">
+            <img src="/help/sweeps_view.png" alt="Sweeps View" />
+            <p className="screenshot-caption">Sweeps View: Validating the area covered by the robot during an emergency stop.</p>
+          </div>
+
+          <h3 id="shadows">4.2. Shadow Analysis (Red Zones)</h3>
+          <p>
+            The system automatically detects areas where one sensor blocks another or where the 
+            <strong>Load Shape</strong> obstructs the view. These are highlighted as red 
+            <strong>Shadow Zones</strong>.
+          </p>
+          <div className="screenshot-container">
+            <img src="/help/shadow_zones.png" alt="Shadow Zones" />
+            <p className="screenshot-caption">Shadow Generation: Identifying blind spots caused by the robot's body or payload.</p>
+          </div>
+
+          <h3 id="poly-edit">4.3. Polygon Editing (Manual Refinement)</h3>
+          <p>
+            If the generated field needs minor adjustments, you can enter <strong>Polygon Edit Mode</strong>:
+          </p>
+          <ul>
+            <li><strong>Drag Points:</strong> Move any vertex to expand or contract the field.</li>
+            <li><strong>Add Points:</strong> Click anywhere on a polygon edge to insert a new vertex.</li>
+            <li><strong>Delete Points:</strong> Right-click a point or press Delete to simplify the shape.</li>
+          </ul>
+
+          <h3 id="result-cad">4.4. Result CAD & Boolean Unions</h3>
+          <p>
+            For complex field requirements, you can use the <strong>CAD Tools</strong> directly 
+            on the generated result. Draw shapes to <strong>Union</strong> (Add) to the field 
+            or <strong>Subtract</strong> (Cut) from it. This is ideal for carving out 
+            "Non-Safe" zones in tight environments.
+          </p>
+
+          <h3 id="masking">4.5. Lidar Masking (Exclusion Zones)</h3>
+          <p>
+            Use the <strong>Global Mask</strong> tool to define areas that should *never* be 
+            monitored by any sensor (e.g., permanent mechanical components like forks or lift mechanisms). 
+            The mask is subtracted from every generated case automatically.
+          </p>
+        </div>
+
+        <hr className="doc-divider" />
+
+        {/* PHASE 4: HARDWARE EXPORT */}
+        <div id="phase4-hardware" className="help-doc-section">
           <h2>Phase 4: Hardware Mapping & Export</h2>
           <p>
-            Finally, map your generated cases to your sensor's physical memory slots (Fieldsets).
+            The final stage is deploying your validated fields to the physical LiDAR hardware.
           </p>
-
           <div className="screenshot-container">
-            <img src="/help/help_hardware.png" alt="Hardware Export" />
-            <p className="screenshot-caption">Hardware Tab: Finalizing export for SICK or Leuze sensors.</p>
+            <img src="/help/hardware_config.png" alt="Hardware Configuration" />
+            <p className="screenshot-caption">Hardware Tab: Mapping cases to sensor fieldsets.</p>
           </div>
-
-          <h3 id="export-formats">Export Formats</h3>
+          <h3 id="deployment">Fieldset Deployment</h3>
           <ul>
-            <li><strong>SICK XML (.sdxml):</strong> Directly importable into SICK Safety Designer.</li>
-            <li><strong>Leuze CSV:</strong> Standard format for Leuze sensor configurations.</li>
-            <li><strong>Case CSV:</strong> A summary report for safety certification documentation.</li>
+            <li><strong>Mapping:</strong> Assign each motion case to a hardware slot (Fieldset 1-128).</li>
+            <li><strong>SICK Export:</strong> Generates `.sdxml` files for direct import into SICK Safety Designer.</li>
+            <li><strong>Leuze Export:</strong> Generates CSV maps for Leuze sensors.</li>
+            <li><strong>Safety Report:</strong> Download a comprehensive CSV summary for your technical safety file.</li>
           </ul>
         </div>
 
         <div className="help-footer-official">
-          &copy; 2026 Safety Studio Web &bull; Enterprise Safety Engineering Tools
+          Safety Studio Web &bull; Engineering Documentation &bull; 2026
         </div>
       </div>
-
-      <style>{`
-        .help-page-container {
-          display: flex;
-          background: #0d0d12;
-          color: #e0e0e0;
-          height: 100%;
-          width: 100%;
-          font-family: 'Inter', sans-serif;
-        }
-        .help-sidebar {
-          width: 300px;
-          background: #14141b;
-          border-right: 1px solid rgba(255,255,255,0.05);
-          padding: 40px 24px;
-          display: flex;
-          flex-direction: column;
-          flex-shrink: 0;
-        }
-        .toc-title {
-          font-size: 0.75rem;
-          text-transform: uppercase;
-          letter-spacing: 0.15em;
-          color: #666;
-          margin-bottom: 24px;
-          font-weight: 800;
-        }
-        .toc-nav {
-          display: flex;
-          flex-direction: column;
-          gap: 4px;
-        }
-        .toc-nav a {
-          color: #aaa;
-          text-decoration: none;
-          font-size: 0.9rem;
-          padding: 10px 14px;
-          border-radius: 8px;
-          transition: all 0.2s;
-          font-weight: 500;
-        }
-        .toc-nav a:hover {
-          color: #fff;
-          background: rgba(255,255,255,0.03);
-        }
-        .toc-sub {
-          padding-left: 20px;
-          margin: 4px 0 12px;
-          border-left: 1px solid rgba(255,255,255,0.05);
-          display: flex;
-          flex-direction: column;
-          gap: 2px;
-        }
-        .toc-sub a {
-          font-size: 0.8rem;
-          padding: 6px 12px;
-        }
-        .help-content-area {
-          flex: 1;
-          padding: 60px 80px;
-          overflow-y: auto;
-          scroll-behavior: smooth;
-        }
-        .doc-main-title {
-          font-size: 3rem;
-          font-weight: 900;
-          margin-bottom: 16px;
-          background: linear-gradient(135deg, #fff 0%, #666 100%);
-          -webkit-background-clip: text;
-          -webkit-text-fill-color: transparent;
-        }
-        .doc-intro {
-          font-size: 1.25rem;
-          line-height: 1.6;
-          color: #999;
-          margin-bottom: 40px;
-          max-width: 800px;
-        }
-        .help-doc-section h2 {
-          font-size: 1.8rem;
-          font-weight: 800;
-          color: #fff;
-          margin-top: 60px;
-          margin-bottom: 24px;
-        }
-        .help-doc-section h3 {
-          font-size: 1.2rem;
-          font-weight: 700;
-          color: #00e5ff;
-          margin-top: 40px;
-          margin-bottom: 16px;
-        }
-        .help-doc-section p {
-          font-size: 1.05rem;
-          line-height: 1.8;
-          color: #bbb;
-          margin-bottom: 24px;
-        }
-        .help-doc-section ul {
-          margin-bottom: 24px;
-          padding-left: 20px;
-        }
-        .help-doc-section li {
-          margin-bottom: 12px;
-          color: #bbb;
-        }
-        .screenshot-container {
-          background: #1a1a24;
-          padding: 16px;
-          border-radius: 16px;
-          border: 1px solid rgba(255,255,255,0.05);
-          margin: 32px 0;
-          box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-        }
-        .screenshot-container img {
-          width: 100%;
-          border-radius: 8px;
-          display: block;
-        }
-        .screenshot-caption {
-          text-align: center;
-          font-size: 0.85rem;
-          color: #666;
-          margin-top: 16px !important;
-          margin-bottom: 0 !important;
-          font-weight: 600;
-          letter-spacing: 0.02em;
-        }
-        .math-box {
-          background: rgba(0,229,255,0.05);
-          border: 1px dashed rgba(0,229,255,0.2);
-          padding: 24px;
-          border-radius: 12px;
-          text-align: center;
-          font-family: 'JetBrains Mono', monospace;
-          font-size: 1.5rem;
-          color: #00e5ff;
-          margin-bottom: 32px;
-        }
-        .param-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 32px;
-          background: rgba(255,255,255,0.02);
-          border-radius: 12px;
-          overflow: hidden;
-        }
-        .param-table th {
-          text-align: left;
-          background: rgba(255,255,255,0.05);
-          padding: 16px;
-          font-size: 0.8rem;
-          text-transform: uppercase;
-          color: #666;
-        }
-        .param-table td {
-          padding: 16px;
-          border-bottom: 1px solid rgba(255,255,255,0.03);
-          font-size: 0.95rem;
-          vertical-align: top;
-        }
-        .doc-divider {
-          border: none;
-          height: 1px;
-          background: linear-gradient(90deg, rgba(255,255,255,0.05), transparent);
-          margin: 80px 0;
-        }
-        .help-footer-official {
-          margin-top: 100px;
-          padding: 40px 0;
-          border-top: 1px solid rgba(255,255,255,0.05);
-          text-align: center;
-          color: #444;
-          font-size: 0.8rem;
-        }
-      `}</style>
     </div>
   );
 };
