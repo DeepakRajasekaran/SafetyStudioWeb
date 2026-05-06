@@ -47,19 +47,19 @@ const Help = () => {
           <h2>Phase 1: Editor & Geometry Setup</h2>
           <p>
             The <strong>Editor</strong> is where you define the physical extents of your robot and its sensors. 
-            Before drawing, ensure you have selected the correct layer (Footprint, Load 1, or Load 2) 
+            Before drawing, ensure you have selected the correct context (Footprint, Load 1, or Load 2) 
             from the CAD toolbar.
           </p>
           
           <div className="screenshot-container">
-            <img src="/help/manual_editor.png" alt="Editor Setup" />
-            <p className="screenshot-caption">The CAD Editor: Defining Footprint, Load 1, and dual-sensor mounting.</p>
+            <img src="/help/user_editor.png" alt="Editor Setup" />
+            <p className="screenshot-caption">The CAD Editor: Defining a 900x600mm Footprint with multiple payloads and sensor offsets.</p>
           </div>
 
           <h3 id="footprint">2.1. Robot Footprint</h3>
           <p>
-            Define your base robot geometry by importing a 1:1 DXF or using the sketching tools. 
-            The system simplifies these shapes into valid polygons for simulation.
+            Define your base robot geometry (e.g., 900mm x 600mm) by importing a 1:1 DXF or using the sketching tools. 
+            For maximum precision, coincide the center of your footprint with the origin (0,0).
           </p>
 
           <h3 id="sketching">2.2. CAD Sketching & Context</h3>
@@ -82,13 +82,13 @@ const Help = () => {
 
           <h3 id="sensors">2.4. Sensor Mounting</h3>
           <p>
-            Mount your LiDARs at strategic positions. A standard reliable setup includes:
+            Mount your LiDARs at strategic positions relative to the robot's center. A standard setup for 
+            360&deg; coverage on a rectangular robot might include:
           </p>
           <ul>
-            <li><strong>Front-Left:</strong> e.g., X: 0.4, Y: 0.3, Angle: 45&deg;.</li>
-            <li><strong>Rear-Right:</strong> e.g., X: -0.4, Y: -0.3, Angle: 225&deg;.</li>
+            <li><strong>LiDAR 1 (Front-Left):</strong> e.g., X: -0.21, Y: 0.36, Angle: -45&deg;.</li>
+            <li><strong>LiDAR 2 (Rear-Right):</strong> e.g., X: 0.21, Y: -0.36, Angle: -135&deg;.</li>
           </ul>
-          <p>This "Cross-Corner" mounting ensures 360&deg; coverage with minimal blind spots.</p>
         </div>
 
         <hr className="doc-divider" />
@@ -102,8 +102,13 @@ const Help = () => {
             based on your Max Velocity and Deceleration parameters.
           </p>
           <div className="screenshot-container">
-            <img src="/help/manual_matrix.png" alt="Evaluation Matrix" />
-            <p className="screenshot-caption">Matrix View: Managing velocity steps and physics parameters.</p>
+            <img src="/help/user_matrix.png" alt="Evaluation Matrix" />
+            <p className="screenshot-caption">Matrix View: Configuring shadow behavior for different payloads.</p>
+          </div>
+          <div className="tip-box">
+            <strong>Shadow Management:</strong> You can toggle shadow calculation per load. 
+            For example, <em>Load 1</em> (internal pallet) may be set to <strong>No Shadow</strong>, 
+            while <em>Load 2</em> (external lift forks) is set to <strong>With Shadow</strong>.
           </div>
         </div>
 
@@ -123,7 +128,7 @@ const Help = () => {
             <strong>Sweeps</strong> view to see the robot's footprint positions during the braking trajectory.
           </p>
           <div className="screenshot-container">
-            <img src="/help/manual_results_sweeps.png" alt="Sweeps View" />
+            <img src="/help/user_results_sweeps.png" alt="Sweeps View" />
             <p className="screenshot-caption">Sweeps View: Inspecting the footprint path during deceleration.</p>
           </div>
 
@@ -133,19 +138,19 @@ const Help = () => {
             safety field into the sensor's local coordinate system (X/Y relative to the lens).
           </p>
           <div className="screenshot-container">
-            <img src="/help/manual_results_lidar.png" alt="LiDAR View" />
+            <img src="/help/user_results_lidar.png" alt="LiDAR View" />
             <p className="screenshot-caption">LiDAR View: Local coordinate perspective for sensor configuration.</p>
           </div>
 
           <h3 id="shadows">4.3. Shadow Analysis</h3>
           <p>
             <strong>Shadow Zones</strong> are automatically generated whenever a <strong>Load Polygon</strong> 
-            is active or when one sensor's body obstructs another. These zones represent areas the 
-            LiDAR cannot monitor and are subtracted from the safety field to prevent false positives.
+            is active (and shadows are enabled for that load). These zones represent areas the 
+            LiDAR cannot monitor due to physical obstructions.
           </p>
           <div className="screenshot-container">
-            <img src="/help/manual_results_composite.png" alt="Shadow Analysis" />
-            <p className="screenshot-caption">Shadow Generation: Identifying blind spots caused by payloads.</p>
+            <img src="/help/user_results_composite.png" alt="Shadow Analysis" />
+            <p className="screenshot-caption">Shadow Generation: Complex shadows cast by circular payloads (Load 2).</p>
           </div>
 
           <h3 id="poly-edit">4.4. Polygon Editing</h3>
@@ -161,7 +166,7 @@ const Help = () => {
             (e.g., ignoring static environment features).
           </p>
           <div className="screenshot-container">
-            <img src="/help/manual_results_cad_subtract.png" alt="CAD Result Editing" />
+            <img src="/help/user_results_cad_subtract.png" alt="CAD Result Editing" />
             <p className="screenshot-caption">CAD Refinement: Using subtraction to customize the final field geometry.</p>
           </div>
         </div>
