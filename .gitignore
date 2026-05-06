@@ -3,6 +3,7 @@ node_modules/
 build/
 dist/
 test/
+tests/
 __pycache__/
 *.pyc
 *.pyo

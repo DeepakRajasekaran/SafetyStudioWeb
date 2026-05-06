@@ -1,6 +1,7 @@
 services:
   backend:
     image: deepakrajasekaran/safetystudioweb:backend
+    pull_policy: always
     container_name: safetystudio-backend
     command: ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--timeout", "120", "app:app"]
     expose:
@@ -11,6 +12,7 @@ services:
 
   frontend:
     image: deepakrajasekaran/safetystudioweb:frontend
+    pull_policy: always
     container_name: safetystudio-frontend
     command: ["nginx", "-g", "daemon off;"]
     ports:
