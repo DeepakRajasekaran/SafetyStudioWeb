@@ -86,8 +86,8 @@ const Help = () => {
             360&deg; coverage on a rectangular robot might include:
           </p>
           <ul>
-            <li><strong>LiDAR 1 (Front-Left):</strong> e.g., X: -0.21, Y: 0.36, Angle: -45&deg;.</li>
-            <li><strong>LiDAR 2 (Rear-Right):</strong> e.g., X: 0.21, Y: -0.36, Angle: -135&deg;.</li>
+            <li><strong>LiDAR 1 (Front-Left)</strong></li>
+            <li><strong>LiDAR 2 (Rear-Right)</strong></li>
           </ul>
         </div>
 
