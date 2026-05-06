@@ -337,16 +337,24 @@ const Generation = ({ globals }) => {
                 </tr>
                 <tr>
                   <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>Hull Threshold (m)</td>
-                  {['NoLoad', 'Load1', 'Load2'].map(load => (
-                    <td key={load} style={{ padding: '0 4px' }}>
-                      <ModernInput
-                        value={physics[load].hull_threshold || 0.5}
-                        onChange={e => handlePhysicsChange(load, 'hull_threshold', e.target.value)}
-                        disabled={load !== 'NoLoad' && !physics[load].enabled}
-                        style={{ opacity: (load !== 'NoLoad' && !physics[load].enabled) ? 0.2 : 1 }}
-                      />
-                    </td>
-                  ))}
+                  {['NoLoad', 'Load1', 'Load2'].map(load => {
+                    const isHybrid = physics[load].field_method === 'hybrid';
+                    const disabled = (load !== 'NoLoad' && !physics[load].enabled) || !isHybrid;
+                    return (
+                      <td key={load} style={{ padding: '0 4px', textAlign: 'center' }}>
+                        {!isHybrid ? (
+                          <span style={{ color: '#333', fontSize: '0.65rem' }}>N/A</span>
+                        ) : (
+                          <ModernInput
+                            value={physics[load].hull_threshold || 0.5}
+                            onChange={e => handlePhysicsChange(load, 'hull_threshold', e.target.value)}
+                            disabled={disabled}
+                            style={{ opacity: disabled ? 0.2 : 1 }}
+                          />
+                        )}
+                      </td>
+                    );
+                  })}
                 </tr>
                 {/* Checkbox rows */}
                 {[
