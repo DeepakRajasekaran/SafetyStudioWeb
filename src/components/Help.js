@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './Help.css';
 
-const ImageCarousel = ({ images, interval = 5000 }) => {
+const ImageCarousel = ({ images, interval = 6000 }) => {
   const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
@@ -17,7 +17,9 @@ const ImageCarousel = ({ images, interval = 5000 }) => {
         {images.map((img, idx) => (
           <div key={idx} className="carousel-slide">
             <img src={img.src} alt={img.alt} />
-            <div className="carousel-caption">{img.caption}</div>
+            <div className="carousel-caption">
+              <strong>{img.title}</strong>: {img.caption}
+            </div>
           </div>
         ))}
       </div>
@@ -37,15 +39,32 @@ const ImageCarousel = ({ images, interval = 5000 }) => {
 };
 
 const Help = () => {
+  const editorImages = [
+    { src: '/help/help_editor.png', title: 'CAD Foundation', alt: 'Editor Setup', caption: 'Defining the 900x600mm footprint and dual-corner LiDAR mounting.' },
+    { src: '/help/user_editor.png', title: 'Load Layers', alt: 'Load Setup', caption: 'Managing multiple payloads (Load 1 and Load 2) with distinct obstruction properties.' }
+  ];
+
+  const matrixImages = [
+    { src: '/help/help_matrix.png', title: 'Global Config', alt: 'Matrix Config', caption: 'Selecting field generation methods (Sweep Union vs Hybrid) and hull thresholds.' },
+    { src: '/help/help_matrix_generator.png', title: 'Case Generator', alt: 'Matrix Generator', caption: 'Automated generation of motion profiles across velocity intensities.' }
+  ];
+
   const resultImages = [
-    { src: '/help/user_results_composite.png', alt: 'Composite View', caption: 'Global Safety Field: The final merged protection zone.' },
-    { src: '/help/user_results_lidar.png', alt: 'LiDAR View', caption: 'Local Coordinate View: Field relative to the sensor lens.' },
-    { src: '/help/user_results_sweeps.png', alt: 'Sweeps View', caption: 'Trajectory Sweeps: Footprint path during braking.' }
+    { src: '/help/help_results_composite.png', title: 'Composite View', alt: 'Composite', caption: 'The final global safety field merged from all active sensors.' },
+    { src: '/help/help_results_lidar1.png', title: 'LiDAR 1 View', alt: 'Lidar1', caption: 'Local coordinate validation for the Front-Left sensor.' },
+    { src: '/help/help_results_lidar2.png', title: 'LiDAR 2 View', alt: 'Lidar2', caption: 'Local coordinate validation for the Rear-Right sensor.' },
+    { src: '/help/help_results_sweeps.png', title: 'Sweeps View', alt: 'Sweeps', caption: 'Visualizing the robot footprint trajectory during an emergency stop.' }
+  ];
+
+  const editingImages = [
+    { src: '/help/help_results_poly_edit.png', title: 'Polygon Editing', alt: 'Poly Edit', caption: 'Direct vertex manipulation: dragging nodes and adding new points to the field boundary.' },
+    { src: '/help/help_results_cad_union.png', title: 'CAD Union', alt: 'Union', caption: 'Merging additional CAD shapes into the generated safety field.' },
+    { src: '/help/help_results_cad_subtract.png', title: 'CAD Subtraction', alt: 'Subtract', caption: 'Carving out exclusion zones or complex apertures from the field geometry.' },
+    { src: '/help/help_results_cad_complex.png', title: 'Complex Intersections', alt: 'Complex', caption: 'Advanced boolean operations for high-precision field refinement.' }
   ];
 
   return (
     <div className="help-page-container">
-      {/* Table of Contents Sidebar */}
       <div className="help-sidebar">
         <h2 className="toc-title">User Manual</h2>
         <nav className="toc-nav">
@@ -71,125 +90,119 @@ const Help = () => {
         </nav>
       </div>
 
-      {/* Main Content Area */}
       <div className="help-content-area">
         <div id="introduction" className="help-doc-section">
           <h1 className="doc-main-title">Safety Studio User Manual</h1>
           <p className="doc-intro">
-            Safety Studio is a comprehensive engineering suite for the automated generation of safety fieldsets. 
-            This manual covers the complete workflow from defining robot geometry to deploying hardware-ready 
-            configurations.
+            Safety Studio is a premium engineering environment for the automated generation of LiDAR-based 
+            safety fieldsets. This manual provides a standalone workflow to design, simulate, and export 
+            safety configurations without external training.
           </p>
         </div>
 
         <hr className="doc-divider" />
 
-        {/* PHASE 1: EDITOR */}
         <div id="phase1-editor" className="help-doc-section">
-          <h2>Phase 1: Editor & Geometry Setup</h2>
+          <h2>Phase 1: Editor & Geometry Foundation</h2>
           <p>
-            The <strong>Editor</strong> is where you define the physical extents of your robot and its sensors. 
-            Before drawing, ensure you have selected the correct context (Footprint, Load 1, or Load 2) 
-            from the CAD toolbar.
+            The foundation of every project is the physical robot geometry. Use the professional CAD tools 
+            to define the robot base, its payloads, and LiDAR mounting positions.
           </p>
           
-          <div className="screenshot-container">
-            <img src="/help/user_editor.png" alt="Editor Setup" />
-            <p className="screenshot-caption">The CAD Editor: Defining a 900x600mm Footprint with multiple payloads.</p>
-          </div>
+          <ImageCarousel images={editorImages} />
 
           <h3 id="footprint">2.1. Robot Footprint</h3>
           <p>
-            Define your base robot geometry (e.g., 900mm x 600mm). For maximum precision, 
-            coincide the center of your footprint with the origin (0,0).
+            Define the base robot geometry (e.g., 900mm x 600mm). For precision, coincide the footprint 
+            center with the global origin (0,0).
           </p>
 
           <h3 id="sketching">2.2. CAD Sketching & Context</h3>
           <p>
-            <strong>IMPORTANT:</strong> Select the intended context in the toolbar before sketching. 
-            Shapes drawn in the <em>Footprint</em> context define the robot base, while those in <em>Load</em> 
-            contexts define payloads that might obstruct sensor views.
+            <strong>IMPORTANT:</strong> Always verify your active context (Footprint vs Load) in the toolbar. 
+            Shapes in the <em>Footprint</em> context define the robot's physical extents, while <em>Load</em> 
+            contexts define payloads that may obstruct sensor visibility.
           </p>
 
           <h3 id="sensors">2.3. Sensor Mounting</h3>
           <p>
-            Mount your LiDARs at strategic positions relative to the robot's center. A standard setup for 
-            360&deg; coverage might include a <strong>Front-Left</strong> and a <strong>Rear-Right</strong> sensor.
+            LiDARs are positioned relative to the robot origin. A dual-corner setup (Front-Left and 
+            Rear-Right) provides 360&deg; coverage.
           </p>
         </div>
 
         <hr className="doc-divider" />
 
-        {/* PHASE 2: MATRIX & GENERATION */}
         <div id="phase2-matrix" className="help-doc-section">
           <h2>Phase 2: Matrix & Case Generation</h2>
           <p>
-            The <strong>Matrix</strong> tab manages the kinematic scenarios and physical parameters 
-            for automated field generation.
+            The <strong>Matrix</strong> tab manages motion scenarios and braking physics.
           </p>
+          
+          <ImageCarousel images={matrixImages} />
 
           <h3 id="matrix-config">3.1. Case Generation</h3>
           <p>
             The <strong>Matrix Generator</strong> builds a comprehensive library of motion profiles. 
-            Define your velocity increments and motion types (Linear, Angular, Spin), then click 
-            <strong>Generate All Cases</strong>. The system will calculate braking distances for every step.
+            Set your velocity increments and motion types, then click <strong>Generate All Cases</strong>. 
+            The system calculates stopping distances based on Reaction Time (Tr) and Deceleration (a).
           </p>
-          
-          <div className="screenshot-container">
-            <img src="/help/user_matrix.png" alt="Evaluation Matrix" />
-            <p className="screenshot-caption">Matrix View: Configuring motion profiles and safety parameters.</p>
-          </div>
 
           <h3 id="shadow-mgmt">3.2. Shadow Management</h3>
           <p>
-            Manage how payloads interact with sensor views. You can toggle shadow calculation 
-            per load. For example, an internal component may be set to <strong>No Shadow</strong>, 
-            while external forks are set to <strong>With Shadow</strong> to cast realistic blind spots.
+            Payloads can cast realistic <strong>Shadow Zones</strong>. Toggle shadow calculation 
+            per load to account for physical obstructions in the sensor's line-of-sight.
           </p>
         </div>
 
         <hr className="doc-divider" />
 
-        {/* PHASE 3: RESULTS & CAROUSEL */}
         <div id="phase3-results" className="help-doc-section">
-          <h2>Phase 3: Validation & Advanced Refinement</h2>
+          <h2>Phase 3: Results & Validation</h2>
           <p>
-            The <strong>Results</strong> tab provides high-fidelity visualization and manual editing tools.
+            The <strong>Results</strong> tab provides interactive tools to validate and manually refine 
+            the generated fields.
           </p>
 
-          <h3 id="view-carousel">4.1. Visual Validation Modes</h3>
-          <p>
-            Inspect the generated fields from different perspectives using the interactive viewer.
-          </p>
+          <h3 id="view-carousel">4.1. Visual Validation</h3>
+          <p>Cycle through different perspective views to ensure full protection coverage.</p>
           
           <ImageCarousel images={resultImages} />
 
           <h3 id="poly-edit">4.2. Polygon Editing</h3>
           <p>
-            Manually refine fields by dragging vertices, clicking edges to add new points, 
-            or using the Delete key to remove unnecessary vertices.
+            For fine adjustments, use <strong>Polygon Edit Mode</strong> to drag vertices or 
+            add/remove nodes from the boundary.
           </p>
 
-          <h3 id="result-cad">4.3. CAD-Based Union/Subtract</h3>
+          <h3 id="result-cad">4.3. CAD Refinement</h3>
           <p>
-            Apply boolean operations directly to the result. Use <strong>Subtract</strong> mode 
-            to manually remove parts of the safety field where monitoring is not required.
+            Apply boolean operations (Union/Subtract) directly to the result polygons for complex 
+            environmental requirements.
           </p>
-          <div className="screenshot-container">
-            <img src="/help/user_results_cad_subtract.png" alt="CAD Result Editing" />
-            <p className="screenshot-caption">CAD Refinement: Customizing field geometry using subtraction.</p>
-          </div>
+
+          <ImageCarousel images={editingImages} />
         </div>
 
         <hr className="doc-divider" />
 
-        {/* PHASE 4: HARDWARE */}
         <div id="phase4-hardware" className="help-doc-section">
-          <h2>Phase 4: Hardware Deployment</h2>
+          <h2>Phase 4: Hardware Mapping & Export</h2>
           <p>
-            Once validated, map your cases to physical fieldsets and export to 
-            <strong>SICK (.sdxml)</strong> or <strong>Leuze (.csv)</strong> formats.
+            The final stage maps validated fields to physical LiDAR fieldsets (1-128) and exports 
+            deployment files.
           </p>
+          
+          <div className="screenshot-container">
+            <img src="/help/help_hardware.png" alt="Hardware Export" />
+            <p className="screenshot-caption">Hardware Mapping: Preparing deployment files for SICK and Leuze sensors.</p>
+          </div>
+          
+          <ul>
+            <li><strong>SICK Export:</strong> Generates .sdxml for Safety Designer.</li>
+            <li><strong>Leuze Export:</strong> Generates CSV mapping for Leuze devices.</li>
+            <li><strong>Safety Report:</strong> Downloads a comprehensive project summary.</li>
+          </ul>
         </div>
 
         <div className="help-footer-official">
