@@ -1,89 +1,134 @@
-import React from 'react';
+import React, { useState } from 'react';
+import './Help.css';
 
 const Help = () => {
+  const [activeTab, setActiveTab] = useState('getting-started');
+
+  const scrollToSection = (id) => {
+    const element = document.getElementById(id);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+      setActiveTab(id);
+    }
+  };
+
   return (
-    <div className="help-container" style={{ padding: '20px 40px', color: '#ddd', width: '100%', height: '100%', overflowY: 'auto', margin: '0', lineHeight: '1.6' }}>
-      <h1 style={{ color: '#4CAF50', borderBottom: '1px solid #333', paddingBottom: '10px' }}>Safety Studio User Guide</h1>
-      <p>This tool generates safety fields for mobile robots based on kinematic footprints and braking physics.</p>
+    <div className="help-page-container">
+      {/* Sidebar Navigation */}
+      <div className="help-sidebar">
+        <h3>Documentation</h3>
+        <button 
+          className={`help-nav-item ${activeTab === 'getting-started' ? 'active' : ''}`}
+          onClick={() => scrollToSection('getting-started')}
+        >
+          Getting Started
+        </button>
+        <button 
+          className={`help-nav-item ${activeTab === 'robot-geometry' ? 'active' : ''}`}
+          onClick={() => scrollToSection('robot-geometry')}
+        >
+          Robot Geometry
+        </button>
+        <button 
+          className={`help-nav-item ${activeTab === 'sensor-config' ? 'active' : ''}`}
+          onClick={() => scrollToSection('sensor-config')}
+        >
+          Sensor Configuration
+        </button>
+        <button 
+          className={`help-nav-item ${activeTab === 'motion-matrix' ? 'active' : ''}`}
+          onClick={() => scrollToSection('motion-matrix')}
+        >
+          Evaluation Matrix
+        </button>
+        <button 
+          className={`help-nav-item ${activeTab === 'export-tools' ? 'active' : ''}`}
+          onClick={() => scrollToSection('export-tools')}
+        >
+          Export & Tools
+        </button>
+      </div>
 
-      <h2 style={{ color: '#2196F3', marginTop: '30px' }}>1. Editor Tab</h2>
-      <ul>
-        <li><strong>Footprint:</strong> Import a DXF file defining the robot's base shape or use the sketching tools.</li>
-        <li><strong>Sensors:</strong> Configure LiDAR placement (X, Y), Mounting Angle, FOV, Range, and <strong>Diameter</strong>.</li>
-        <li><strong>Lidar Capacity:</strong> Use the <strong>CAPACITY</strong> input at the top of the manager to set the maximum allowed fields globally.</li>
-        <li><strong>Loads:</strong> Load additional DXF shapes for L1/L2 configurations.</li>
-      </ul>
-      <p><em style={{ color: '#aaa' }}>Note: The DXF origin (0,0) is considered the <strong>base_link</strong>.</em></p>
+      {/* Main Content Area */}
+      <div className="help-content-area">
+        <div className="help-breadcrumb">
+          Safety Studio <span>/</span> Documentation <span>/</span> {activeTab.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
+        </div>
 
-      <h2 style={{ color: '#2196F3', marginTop: '30px' }}>2. Geometric Sketching</h2>
-      <p>Create precise robot footprints and safety field zones directly in the browser.</p>
-      <ul>
-        <li><strong>Drawing Tools:</strong> Use <strong>Line</strong>, <strong>Circle</strong>, or <strong>Rect</strong> to define geometry.
-          <ul>
-            <li><em>Polylines:</em> The Line tool allows chaining; double-click or press Enter to finalize the path.</li>
-            <li><em>Snap:</em> Tools automatically snap to existing vertices and edges for precision.</li>
-          </ul>
-        </li>
-        <li><strong>Global Modifiers:</strong>
-          <ul>
-            <li><strong>Construction:</strong> Shapes drawn in this mode (dashed) are for reference/constraints only and are ignored in the final safety field.</li>
-            <li><strong>Subtract:</strong> Shapes drawn in red act as cutouts (holes) in the robot footprint.</li>
-          </ul>
-        </li>
-        <li><strong>Constraints & Dimensions:</strong>
-          <ul>
-            <li><strong>Constraints:</strong> Select two elements to apply geometric relationships (Equal, Parallel, Perpendicular, etc.).</li>
-            <li><strong>Dimensions:</strong> Click an edge or two points to set precise distances. Click an existing dimension label to edit its value and tolerance.</li>
-            <li><strong>Anchors:</strong> Use the Anchor tool to fix specific points to the canvas (the origin is fixed by default).</li>
-          </ul>
-        </li>
-        <li><strong>Selection & Editing:</strong>
-          <ul>
-            <li><strong>Marquee:</strong> Double-click on empty space to start a rectangular selection box.</li>
-            <li><strong>Multi-select:</strong> Hold <strong>Shift</strong> while clicking to select multiple shapes.</li>
-            <li><strong>Delete:</strong> Press <strong>Delete</strong> or <strong>Backspace</strong> to remove selected elements.</li>
-          </ul>
-        </li>
-      </ul>
+        <section id="getting-started" className="help-section">
+          <h1>User Documentation</h1>
+          <p>
+            Welcome to the <strong>Safety Studio</strong> user guide. This platform provides specialized tools for designing, 
+            simulating, and exporting certified safety field configurations for mobile industrial robots.
+          </p>
+          <div className="info-box">
+            <p><strong>Note:</strong> All physical dimensions in this tool are processed in <strong>Meters (m)</strong> and <strong>Degrees (°)</strong> unless otherwise specified.</p>
+          </div>
+        </section>
 
-      <h2 style={{ color: '#2196F3', marginTop: '30px' }}>3. Evaluation Matrix</h2>
-      <ul>
-        <li><strong>Intensity Levels:</strong> Replaces simple counts. Cases are generated at uniform velocity intervals (Effective Step) from 0 up to Max V.</li>
-        <li><strong>Scale to Hardware:</strong> Automatically calculates the maximum Intensity Levels that fit within your configured Lidar Capacity.</li>
-        <li><strong>Motion Types:</strong>
+        <section id="robot-geometry" className="help-section">
+          <h2>Robot Geometry & Swept Areas</h2>
+          <p>
+            The foundation of a safety field is the robot's physical footprint. The tool uses this footprint 
+            to calculate the "Swept Area"—the total physical space occupied by the robot as it moves along a path.
+          </p>
           <ul>
-            <li><strong>Forward/Reverse:</strong> Linear motion cases.</li>
-            <li><strong>Curve / Turn:</strong> Angular motion cases.</li>
-            <li><strong>In-place Rotate:</strong> v=0 rotation cases.</li>
-            <li><strong>Idle (Stop):</strong> v=0, w=0 safety field.</li>
+            <li><strong>Footprint Import:</strong> Use the <em>Editor</em> tab to upload a DXF file or sketch the base link.</li>
+            <li><strong>Safety Boundary:</strong> The boundary is calculated based on the maximum extent of the robot, including any dynamic loads.</li>
           </ul>
-        </li>
-        <li><strong>Sorting:</strong> All cases are generated in strictly ascending numerical order (e.g., -1.0 to +1.0).</li>
-      </ul>
+          <div className="help-illustration">
+            <img src="/help/swept_area_literal.png" alt="Swept Area Schematic" />
+            <div className="help-illustration-caption">Figure 1: Relationship between Robot Footprint and generated Swept Area.</div>
+          </div>
+        </section>
 
-      <h2 style={{ color: '#2196F3', marginTop: '30px' }}>4. Results Tab</h2>
-      <ul>
-        <li><strong>View Modes:</strong>
+        <section id="sensor-config" className="help-section">
+          <h2>LiDAR Sensor Configuration</h2>
+          <p>
+            Sensors are the 'eyes' of the safety system. Accurate placement and configuration are critical for eliminating blind spots.
+          </p>
           <ul>
-            <li><strong>Composite:</strong> Shows all active sensor fields merged.</li>
-            <li><strong>LiDAR View:</strong> Shows individual sensor fields with consistent color outlines.</li>
-            <li><strong>Sweep Steps:</strong> Visualizes the intermediate footprint projections.</li>
+            <li><strong>Placement:</strong> Position sensors using (X, Y) coordinates relative to the robot's center (base_link).</li>
+            <li><strong>Field of View (FOV):</strong> Define the scanning sector. Standard industrial sensors often support 270°.</li>
+            <li><strong>Mounting Angle:</strong> Rotate the sensor orientation to cover specific corners or sides.</li>
           </ul>
-        </li>
-        <li><strong>Case Explorer:</strong> Select results from the sidebar to view detailed calculations.</li>
-        <li><strong>Inspector:</strong> Disabled by default; toggle it via the (i) icon to see vertex coordinates.</li>
-      </ul>
+          <div className="help-illustration">
+            <img src="/help/lidar_fov_literal.png" alt="LiDAR Configuration Schematic" />
+            <div className="help-illustration-caption">Figure 2: LiDAR Field of View (FOV) and Range configuration.</div>
+          </div>
+        </section>
 
-      <h2 style={{ color: '#2196F3', marginTop: '30px' }}>5. Hardware Export Tab</h2>
-      <ul>
-        <li><strong>Global Capacity:</strong> Shows the remaining field slots based on your configuration.</li>
-        <li><strong>Sequential Auto-Gen:</strong> Pairs evaluation cases into fieldsets of 2 fields each in Matrix order.</li>
-        <li><strong>Warnings:</strong> Fieldsets with uncalculated cases are marked with a ⚠️ icon.</li>
-        <li><strong>Export:</strong> Download SICK XML (.sdxml) or Leuze CSV (.zip) packages.</li>
-      </ul>
+        <section id="motion-matrix" className="help-section">
+          <h2>Evaluation Matrix</h2>
+          <p>
+            The matrix defines the set of motion cases (velocities and paths) for which safety fields must be generated.
+          </p>
+          <ul>
+            <li><strong>Forward/Reverse:</strong> Linear paths at varying velocities.</li>
+            <li><strong>Turning/Curving:</strong> Paths with specific radii for cornering.</li>
+            <li><strong>In-Place Rotation:</strong> Stationary rotation at defined angular velocities.</li>
+          </ul>
+          <div className="help-illustration">
+            <img src="/help/motion_types_literal.png" alt="Motion Types Icons" />
+            <div className="help-illustration-caption">Figure 3: Primary motion types supported for field generation.</div>
+          </div>
+        </section>
 
-      <div style={{ marginTop: '50px', borderTop: '1px solid #333', paddingTop: '20px', textAlign: 'center', opacity: 0.5, fontSize: '0.8rem' }}>
-        Safety Studio Web Migration &bull; 2026
+        <section id="export-tools" className="help-section">
+          <h2>Exporting to Hardware</h2>
+          <p>
+            Once fields are generated, they can be grouped into fieldsets and exported for specific sensor hardware.
+          </p>
+          <ul>
+            <li><strong>SICK XML (.sdxml):</strong> For SICK MicroScan3 and nanoScan3 sensors.</li>
+            <li><strong>Leuze CSV:</strong> For Leuze RSL400 series sensors.</li>
+            <li><strong>Validation:</strong> Ensure all cases are calculated (no warning icons) before final export.</li>
+          </ul>
+        </section>
+
+        <div className="help-footer-official">
+          Safety Studio Web Migration &bull; Quality Management System &bull; 2026
+        </div>
       </div>
     </div>
   );

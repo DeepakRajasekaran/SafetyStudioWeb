@@ -1,0 +1,166 @@
+/* Help.css - GIGW Inspired Design */
+
+.help-page-container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+  background: #fdfdfd; /* Off-white for readability */
+  color: #1a1a1a;
+  font-family: 'Inter', Arial, sans-serif;
+  overflow: hidden;
+}
+
+/* Sidebar Navigation */
+.help-sidebar {
+  width: 280px;
+  background: #f4f4f4;
+  border-right: 1px solid #ddd;
+  padding: 30px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.help-sidebar h3 {
+  font-size: 0.9rem;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 15px;
+  padding-left: 10px;
+}
+
+.help-nav-item {
+  padding: 12px 15px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #333;
+  transition: all 0.2s;
+  text-decoration: none;
+}
+
+.help-nav-item:hover {
+  background: #e0e0e0;
+  color: #000;
+}
+
+.help-nav-item.active {
+  background: #0056b3; /* GIGW Blue */
+  color: #fff;
+}
+
+/* Main Content Area */
+.help-content-area {
+  flex: 1;
+  padding: 40px 60px;
+  overflow-y: auto;
+  scroll-behavior: smooth;
+  background: #fff;
+}
+
+.help-breadcrumb {
+  font-size: 0.85rem;
+  color: #666;
+  margin-bottom: 20px;
+}
+
+.help-breadcrumb span {
+  margin: 0 8px;
+  opacity: 0.5;
+}
+
+.help-section {
+  margin-bottom: 60px;
+  max-width: 900px;
+}
+
+.help-section h1 {
+  font-size: 2.2rem;
+  color: #0056b3;
+  border-bottom: 3px solid #0056b3;
+  padding-bottom: 15px;
+  margin-bottom: 30px;
+}
+
+.help-section h2 {
+  font-size: 1.6rem;
+  color: #333;
+  margin-top: 40px;
+  margin-bottom: 20px;
+}
+
+.help-section p {
+  font-size: 1.1rem;
+  line-height: 1.7;
+  color: #444;
+  margin-bottom: 20px;
+}
+
+.help-section ul {
+  padding-left: 25px;
+  margin-bottom: 25px;
+}
+
+.help-section li {
+  margin-bottom: 15px;
+  font-size: 1.05rem;
+  color: #444;
+}
+
+.help-section strong {
+  color: #000;
+}
+
+/* Illustration Styling */
+.help-illustration {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 8px;
+  padding: 20px;
+  margin: 30px 0;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+}
+
+.help-illustration img {
+  width: 100%;
+  max-width: 700px;
+  height: auto;
+  display: block;
+  margin: 0 auto;
+}
+
+.help-illustration-caption {
+  text-align: center;
+  font-size: 0.9rem;
+  color: #666;
+  margin-top: 15px;
+  font-style: italic;
+}
+
+/* Info Boxes */
+.info-box {
+  background: #eef6ff;
+  border-left: 5px solid #2196f3;
+  padding: 20px;
+  border-radius: 4px;
+  margin: 30px 0;
+}
+
+.info-box p {
+  margin: 0;
+  font-size: 1rem;
+  color: #0d47a1;
+}
+
+/* Footer */
+.help-footer-official {
+  margin-top: 80px;
+  padding-top: 30px;
+  border-top: 1px solid #ddd;
+  text-align: center;
+  color: #888;
+  font-size: 0.85rem;
+}
