@@ -1,7 +1,48 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './Help.css';
 
+const ImageCarousel = ({ images, interval = 5000 }) => {
+  const [activeIndex, setActiveIndex] = useState(0);
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setActiveIndex((prev) => (prev + 1) % images.length);
+    }, interval);
+    return () => clearInterval(timer);
+  }, [images.length, interval]);
+
+  return (
+    <div className="carousel-container">
+      <div className="carousel-track" style={{ transform: `translateX(-${activeIndex * 100}%)` }}>
+        {images.map((img, idx) => (
+          <div key={idx} className="carousel-slide">
+            <img src={img.src} alt={img.alt} />
+            <div className="carousel-caption">{img.caption}</div>
+          </div>
+        ))}
+      </div>
+      <div className="carousel-dots">
+        {images.map((_, idx) => (
+          <button
+            key={idx}
+            className={`carousel-dot ${idx === activeIndex ? 'active' : ''}`}
+            onClick={() => setActiveIndex(idx)}
+          />
+        ))}
+      </div>
+      <button className="carousel-control prev" onClick={() => setActiveIndex((prev) => (prev - 1 + images.length) % images.length)}>‹</button>
+      <button className="carousel-control next" onClick={() => setActiveIndex((prev) => (prev + 1) % images.length)}>›</button>
+    </div>
+  );
+};
+
 const Help = () => {
+  const resultImages = [
+    { src: '/help/user_results_composite.png', alt: 'Composite View', caption: 'Global Safety Field: The final merged protection zone.' },
+    { src: '/help/user_results_lidar.png', alt: 'LiDAR View', caption: 'Local Coordinate View: Field relative to the sensor lens.' },
+    { src: '/help/user_results_sweeps.png', alt: 'Sweeps View', caption: 'Trajectory Sweeps: Footprint path during braking.' }
+  ];
+
   return (
     <div className="help-page-container">
       {/* Table of Contents Sidebar */}
@@ -13,17 +54,18 @@ const Help = () => {
           <div className="toc-sub">
             <a href="#footprint">2.1. Robot Footprint</a>
             <a href="#sketching">2.2. CAD Sketching</a>
-            <a href="#booleans">2.3. Boolean Operations</a>
-            <a href="#sensors">2.4. Sensor Mounting</a>
+            <a href="#sensors">2.3. Sensor Mounting</a>
           </div>
-          <a href="#phase2-matrix">3. Phase 2: Evaluation Matrix</a>
+          <a href="#phase2-matrix">3. Phase 2: Matrix & Generation</a>
+          <div className="toc-sub">
+            <a href="#matrix-config">3.1. Case Generation</a>
+            <a href="#shadow-mgmt">3.2. Shadow Management</a>
+          </div>
           <a href="#phase3-results">4. Phase 3: Validation & Refinement</a>
           <div className="toc-sub">
-            <a href="#views">4.1. View Modes</a>
-            <a href="#lidar-view">4.2. LiDAR Coordinate View</a>
-            <a href="#shadows">4.3. Shadow Analysis</a>
-            <a href="#poly-edit">4.4. Polygon Editing</a>
-            <a href="#result-cad">4.5. CAD-Based Union/Subtract</a>
+            <a href="#view-carousel">4.1. Visual Validation</a>
+            <a href="#poly-edit">4.2. Polygon Editing</a>
+            <a href="#result-cad">4.3. CAD Refinement</a>
           </div>
           <a href="#phase4-hardware">5. Phase 4: Hardware Export</a>
         </nav>
@@ -53,121 +95,89 @@ const Help = () => {
           
           <div className="screenshot-container">
             <img src="/help/user_editor.png" alt="Editor Setup" />
-            <p className="screenshot-caption">The CAD Editor: Defining a 900x600mm Footprint with multiple payloads and sensor offsets.</p>
+            <p className="screenshot-caption">The CAD Editor: Defining a 900x600mm Footprint with multiple payloads.</p>
           </div>
 
           <h3 id="footprint">2.1. Robot Footprint</h3>
           <p>
-            Define your base robot geometry (e.g., 900mm x 600mm) by importing a 1:1 DXF or using the sketching tools. 
-            For maximum precision, coincide the center of your footprint with the origin (0,0).
+            Define your base robot geometry (e.g., 900mm x 600mm). For maximum precision, 
+            coincide the center of your footprint with the origin (0,0).
           </p>
 
           <h3 id="sketching">2.2. CAD Sketching & Context</h3>
           <p>
-            <strong>IMPORTANT:</strong> Before creating new shapes, select the intended context in the toolbar. 
+            <strong>IMPORTANT:</strong> Select the intended context in the toolbar before sketching. 
             Shapes drawn in the <em>Footprint</em> context define the robot base, while those in <em>Load</em> 
             contexts define payloads that might obstruct sensor views.
           </p>
 
-          <h3 id="booleans">2.3. Boolean Operations (Union/Subtract)</h3>
-          <p>
-            You can create complex geometries using <strong>Subtraction Mode</strong>. 
-            While hollow robot bodies are rare, subtraction is frequently used to:
-          </p>
-          <ul>
-            <li>Carve out notches or irregular shapes in footprints.</li>
-            <li>Remove specific sectors from a load polygon to account for mechanical apertures.</li>
-            <li>Define exclusion zones directly within the generated safety fields.</li>
-          </ul>
-
-          <h3 id="sensors">2.4. Sensor Mounting</h3>
+          <h3 id="sensors">2.3. Sensor Mounting</h3>
           <p>
             Mount your LiDARs at strategic positions relative to the robot's center. A standard setup for 
-            360&deg; coverage on a rectangular robot might include:
+            360&deg; coverage might include a <strong>Front-Left</strong> and a <strong>Rear-Right</strong> sensor.
           </p>
-          <ul>
-            <li><strong>LiDAR 1 (Front-Left)</strong></li>
-            <li><strong>LiDAR 2 (Rear-Right)</strong></li>
-          </ul>
         </div>
 
         <hr className="doc-divider" />
 
-        {/* PHASE 2: MATRIX */}
+        {/* PHASE 2: MATRIX & GENERATION */}
         <div id="phase2-matrix" className="help-doc-section">
-          <h2>Phase 2: The Evaluation Matrix</h2>
+          <h2>Phase 2: Matrix & Case Generation</h2>
           <p>
-            The <strong>Matrix</strong> defines the kinematic scenarios for field generation. 
-            Click <strong>Generate All Cases</strong> to automatically build a library of motion profiles 
-            based on your Max Velocity and Deceleration parameters.
+            The <strong>Matrix</strong> tab manages the kinematic scenarios and physical parameters 
+            for automated field generation.
           </p>
+
+          <h3 id="matrix-config">3.1. Case Generation</h3>
+          <p>
+            The <strong>Matrix Generator</strong> builds a comprehensive library of motion profiles. 
+            Define your velocity increments and motion types (Linear, Angular, Spin), then click 
+            <strong>Generate All Cases</strong>. The system will calculate braking distances for every step.
+          </p>
+          
           <div className="screenshot-container">
             <img src="/help/user_matrix.png" alt="Evaluation Matrix" />
-            <p className="screenshot-caption">Matrix View: Configuring shadow behavior for different payloads.</p>
+            <p className="screenshot-caption">Matrix View: Configuring motion profiles and safety parameters.</p>
           </div>
-          <div className="tip-box">
-            <strong>Shadow Management:</strong> You can toggle shadow calculation per load. 
-            For example, <em>Load 1</em> (internal pallet) may be set to <strong>No Shadow</strong>, 
-            while <em>Load 2</em> (external lift forks) is set to <strong>With Shadow</strong>.
-          </div>
+
+          <h3 id="shadow-mgmt">3.2. Shadow Management</h3>
+          <p>
+            Manage how payloads interact with sensor views. You can toggle shadow calculation 
+            per load. For example, an internal component may be set to <strong>No Shadow</strong>, 
+            while external forks are set to <strong>With Shadow</strong> to cast realistic blind spots.
+          </p>
         </div>
 
         <hr className="doc-divider" />
 
-        {/* PHASE 3: RESULTS */}
+        {/* PHASE 3: RESULTS & CAROUSEL */}
         <div id="phase3-results" className="help-doc-section">
           <h2>Phase 3: Validation & Advanced Refinement</h2>
           <p>
-            The <strong>Results</strong> tab provides high-fidelity visualization and manual editing tools 
-            for the generated fieldsets.
+            The <strong>Results</strong> tab provides high-fidelity visualization and manual editing tools.
           </p>
 
-          <h3 id="views">4.1. View Modes (Composite vs Sweeps)</h3>
+          <h3 id="view-carousel">4.1. Visual Validation Modes</h3>
           <p>
-            Switch between <strong>Composite</strong> view to see the final merged field, or 
-            <strong>Sweeps</strong> view to see the robot's footprint positions during the braking trajectory.
+            Inspect the generated fields from different perspectives using the interactive viewer.
           </p>
-          <div className="screenshot-container">
-            <img src="/help/user_results_sweeps.png" alt="Sweeps View" />
-            <p className="screenshot-caption">Sweeps View: Inspecting the footprint path during deceleration.</p>
-          </div>
+          
+          <ImageCarousel images={resultImages} />
 
-          <h3 id="lidar-view">4.2. LiDAR Coordinate View</h3>
-          <p>
-            For hardware validation, switch to <strong>LiDAR View</strong>. This transforms the global 
-            safety field into the sensor's local coordinate system (X/Y relative to the lens).
-          </p>
-          <div className="screenshot-container">
-            <img src="/help/user_results_lidar.png" alt="LiDAR View" />
-            <p className="screenshot-caption">LiDAR View: Local coordinate perspective for sensor configuration.</p>
-          </div>
-
-          <h3 id="shadows">4.3. Shadow Analysis</h3>
-          <p>
-            <strong>Shadow Zones</strong> are automatically generated whenever a <strong>Load Polygon</strong> 
-            is active (and shadows are enabled for that load). These zones represent areas the 
-            LiDAR cannot monitor due to physical obstructions.
-          </p>
-          <div className="screenshot-container">
-            <img src="/help/user_results_composite.png" alt="Shadow Analysis" />
-            <p className="screenshot-caption">Shadow Generation: Complex shadows cast by circular payloads (Load 2).</p>
-          </div>
-
-          <h3 id="poly-edit">4.4. Polygon Editing</h3>
+          <h3 id="poly-edit">4.2. Polygon Editing</h3>
           <p>
             Manually refine fields by dragging vertices, clicking edges to add new points, 
             or using the Delete key to remove unnecessary vertices.
           </p>
 
-          <h3 id="result-cad">4.5. CAD-Based Union/Subtract</h3>
+          <h3 id="result-cad">4.3. CAD-Based Union/Subtract</h3>
           <p>
             Apply boolean operations directly to the result. Use <strong>Subtract</strong> mode 
-            to manually remove parts of the safety field where monitoring is not required 
-            (e.g., ignoring static environment features).
+            to manually remove parts of the safety field where monitoring is not required.
           </p>
           <div className="screenshot-container">
             <img src="/help/user_results_cad_subtract.png" alt="CAD Result Editing" />
-            <p className="screenshot-caption">CAD Refinement: Using subtraction to customize the final field geometry.</p>
+            <p className="screenshot-caption">CAD Refinement: Customizing field geometry using subtraction.</p>
           </div>
         </div>
 
