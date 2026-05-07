@@ -49,6 +49,8 @@ const ImageCarousel = ({ images, interval = 6000 }) => {
 };
 
 const Help = () => {
+  const [showVideo, setShowVideo] = useState(false);
+
   const geometryImages = [
     { src: '/help/manual/sketching_footprint.png', title: 'Sketching Footprint', alt: 'Footprint', caption: 'Starting with the robot base geometry.' },
     { src: '/help/manual/footprint_after_sketching.png', title: 'Defined Footprint', alt: 'Footprint Final', caption: 'The finalized robot base polygon.' },
@@ -89,25 +91,29 @@ const Help = () => {
         <h2 className="toc-title">User Manual</h2>
         <nav className="toc-nav">
           <a href="#introduction">1. Introduction</a>
-          <a href="#tutorial">2. Video Tutorial</a>
-          <a href="#phase1-editor">3. Phase 1: Editor & Geometry</a>
+          
+          <a href="#phase1-editor">2. Phase 1: Editor & Geometry</a>
           <div className="toc-sub">
-            <a href="#geometry-flow">3.1. Geometry Workflow</a>
-            <a href="#sketching">3.2. CAD Sketching</a>
-            <a href="#sensor-config">3.3. Sensor Configuration</a>
+            <a href="#geometry-flow">2.1. Geometry Workflow</a>
+            <a href="#sketching">2.2. CAD Sketching</a>
+            <a href="#sensor-config">2.3. Sensor Configuration</a>
           </div>
-          <a href="#phase2-matrix">4. Phase 2: Matrix & Generation</a>
+          <a href="#phase2-matrix">3. Phase 2: Matrix & Generation</a>
           <div className="toc-sub">
-            <a href="#matrix-config">4.1. Matrix Configuration & Case Generation</a>
+            <a href="#matrix-config">3.1. Matrix Configuration & Case Generation</a>
           </div>
-          <a href="#phase3-results">5. Phase 3: Results & Validation</a>
+          <a href="#phase3-results">4. Phase 3: Results & Validation</a>
           <div className="toc-sub">
-            <a href="#mask-mgmt">5.1. Global Mask Management</a>
-            <a href="#poly-edit">5.2. Polygon Editing</a>
-            <a href="#cad-refinement">5.3. CAD Refinement</a>
-            <a href="#shadow-gen">5.4. Shadow Generation</a>
+            <a href="#mask-mgmt">4.1. Global Mask Management</a>
+            <a href="#poly-edit">4.2. Polygon Editing</a>
+            <a href="#cad-refinement">4.3. CAD Refinement</a>
+            <a href="#shadow-gen">4.4. Shadow Generation</a>
           </div>
-          <a href="#phase4-export">6. Phase 4: Hardware Export</a>
+          <a href="#phase4-export">5. Phase 4: Hardware Export</a>
+
+          <button className="toc-video-btn" onClick={() => setShowVideo(true)}>
+            <span className="play-icon">▶</span> 6. Video Tutorial
+          </button>
         </nav>
       </div>
 
@@ -121,24 +127,6 @@ const Help = () => {
           </p>
         </div>
 
-        <div id="tutorial" className="help-doc-section">
-          <h2>Video Tutorial</h2>
-          <p>
-            Watch our end-to-end tutorial to see Safety Studio in action. This video covers the 
-            complete workflow from initial geometry setup to hardware export.
-          </p>
-          <div className="video-player-container">
-            <video 
-              controls 
-              className="tutorial-video"
-              poster="/help/manual/results_page.png"
-            >
-              <source src="/tutorial.mp4" type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          </div>
-        </div>
-
         <hr className="doc-divider" />
 
         <div id="phase1-editor" className="help-doc-section">
@@ -148,13 +136,13 @@ const Help = () => {
             Footprint, Load 1, and Load 2.
           </p>
 
-          <h3 id="geometry-flow">3.1. Geometry Workflow</h3>
+          <h3 id="geometry-flow">2.1. Geometry Workflow</h3>
           <p>
-            Start with the <strong>Footprint</strong> to define the base robot. Then, add <strong>Loads</strong>  
+            Start with the <strong>Footprint</strong> to define the base robot. Then, add <strong>Loads</strong> 
             which represent payloads. These loads are critical for calculating sensor shadows.
           </p>
 
-          <h3 id="sketching">3.2. CAD Sketching</h3>
+          <h3 id="sketching">2.2. CAD Sketching</h3>
           <p>
             The CAD Editor provides professional sketching tools to define complex robot shapes.
           </p>
@@ -166,7 +154,7 @@ const Help = () => {
             <p className="screenshot-caption">Complete Setup: Footprint and Loads fully defined.</p>
           </div>
 
-          <h3 id="sensor-config">3.3. Sensor Configuration</h3>
+          <h3 id="sensor-config">2.3. Sensor Configuration</h3>
           <p>
             Precisely define the mounting position (X, Y) and orientation (Angle) of each LiDAR sensor 
             relative to the robot's base link origin. You must also specify the <strong>Max Fields</strong> 
@@ -188,7 +176,7 @@ const Help = () => {
           
           <ImageCarousel images={matrixImages} />
 
-          <h3 id="matrix-config">4.1. Matrix Configuration & Case Generation</h3>
+          <h3 id="matrix-config">3.1. Matrix Configuration & Case Generation</h3>
           <p>
             The <strong>Evaluation Matrix</strong> serves as the central hub for defining the robot's dynamic safety constraints. 
             This phase involves configuring critical <strong>Physics parameters</strong> (deceleration, reaction time), 
@@ -207,30 +195,30 @@ const Help = () => {
             Inspect and refine the generated safety fields.
           </p>
 
-          <h3 id="mask-mgmt">5.1. Global Mask Management</h3>
+          <h3 id="mask-mgmt">4.1. Global Mask Management</h3>
           <p>
             Define exclusion zones that apply to all generated cases. Masks are used to hide 
             static robot parts from the sensors' field of view.
           </p>
           <ImageCarousel images={maskImages} />
 
-          <h3 id="poly-edit">5.2. Manual Polygon Editing</h3>
+          <h3 id="poly-edit">4.2. Manual Polygon Editing</h3>
           <p>
             Drag individual vertices to adjust the field boundary. You can also add new points by clicking 
             between existing ones or remove them to simplify the shape.
           </p>
           <ImageCarousel images={polygonEditImages} />
 
-          <h3 id="cad-refinement">5.3. CAD-Based Refinement</h3>
+          <h3 id="cad-refinement">4.3. CAD-Based Refinement</h3>
           <p>
             Use parametric CAD tools to "patch" regions of the field. This supports Union (adding area) 
             and Subtraction (carving out area).
           </p>
           <ImageCarousel images={cadEditImages} />
 
-          <h3 id="shadow-gen">5.4. Shadow Generation Visualization</h3>
+          <h3 id="shadow-gen">4.4. Shadow Generation Visualization</h3>
           <p>
-            The system automatically performs <strong>Shadow Generation</strong> (Red) where 
+            The system automatically performs <strong>Shadow Generation</strong> where 
             the load obstructs the sensor's line of sight.
           </p>
           <div className="screenshot-container">
@@ -255,6 +243,25 @@ const Help = () => {
         <div className="help-footer-official">
           Safety Studio &bull; Documentation &bull; 2026
         </div>
+
+        {showVideo && (
+          <div className="video-modal-overlay" onClick={() => setShowVideo(false)}>
+            <div className="video-modal-content" onClick={(e) => e.stopPropagation()}>
+              <button className="modal-close-btn" onClick={() => setShowVideo(false)}>&times;</button>
+              <div className="video-player-container-modal">
+                <video 
+                  controls 
+                  className="tutorial-video-modal"
+                  poster="/help/manual/results_page.png"
+                  preload="auto"
+                >
+                  <source src="/tutorial.mp4" type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
