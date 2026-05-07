@@ -211,13 +211,22 @@ class SafetyMath:
             dt=0.02; ts=np.arange(0,T+dt,dt); sweeps=[]
             traj=np.zeros((len(ts),3)); traj[0]=[0,0,np.pi/2]
             
+            # Sweep base selection:
+            # If use_hull_polygon is True, compute convex_hull of (footprint + load) and sweep that.
+            # Otherwise sweep the normal union polygon (existing behavior).
+            field_method = P.get('field_method', 'union')
+            if P.get('use_hull_polygon', False):
+                sweep_base = unpadded_geom.convex_hull.buffer(P['pad'], join_style=2)
+            else:
+                sweep_base = FootPrint
+            
             for i in range(len(ts)):
                 if i>0:
                     px,py,pth = traj[i-1]
                     traj[i] = [px+v*np.cos(pth)*dt, py+v*np.sin(pth)*dt, pth+ang_vel*dt]
                 if override_poly is None:
                     cx,cy,cth = traj[i]; rot_deg = np.degrees(cth - np.pi/2)
-                    poly_instance = translate(rotate(FootPrint, rot_deg, origin=(0,0)), cx, cy)
+                    poly_instance = translate(rotate(sweep_base, rot_deg, origin=(0,0)), cx, cy)
                     sweeps.append(poly_instance)
             
             if override_poly is not None:
@@ -226,7 +235,10 @@ class SafetyMath:
                 sw_union = unary_union(sweeps)
                 if abs(v) < 1e-3 and abs(ang_vel) > 1e-3 and P.get('patch_notch', False):
                     sw_union = SafetyMath.patch_notch(sw_union)
-                field_method = P.get('field_method', 'union')
+                # field_method controls the post-sweep output shape:
+                # 'union'  -> standard union of all sweep instances
+                # 'hull'   -> convex hull of the sweep union
+                # 'hybrid' -> convex hull only if stopping distance < threshold
                 if field_method == 'hull':
                     sw_union = sw_union.convex_hull
                 elif field_method == 'hybrid':

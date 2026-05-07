@@ -360,6 +360,7 @@ const Generation = ({ globals }) => {
                 {[
                   { lbl: 'Shadow Zones', k: 'shadow', naFor: 'NoLoad' },
                   { lbl: 'Include Load Shape', k: 'include_load', naFor: 'NoLoad' },
+                  { lbl: 'Hull Polygon Sweep', k: 'use_hull_polygon', naFor: null },
                   { lbl: 'Patch Notches', k: 'patch_notch', naFor: null },
                 ].map(row => (
                   <tr key={row.k}>

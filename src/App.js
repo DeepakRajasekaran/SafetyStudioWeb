@@ -30,9 +30,9 @@ function App() {
     geometry: { FootPrint: null, Load1: null, Load2: null },
     sensors: [],
     physics: {
-      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 },
-      Load1:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 },
-      Load2:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5 }
+      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false },
+      Load1:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false },
+      Load2:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false }
     },
     evaluationCases: [
       { id: 1, load: 'NoLoad', v: 1.0, w: 0.0, type: 'std' },
@@ -179,12 +179,22 @@ function App() {
   }, []);
 
   useEffect(() => {
-     const session = {
-       geometry, sensors, physics, evaluationCases, 
-       genConfig, results, fieldsets, maxFields, cadData
-     };
-     localStorage.setItem('safetystudio_session_v1', JSON.stringify(session));
-  }, [geometry, sensors, physics, evaluationCases, genConfig, results, fieldsets, maxFields, cadData]);
+     try {
+       // Exclude results/fieldsets: polygon data can be very large and bust the 5MB localStorage limit.
+       // These can be regenerated on-demand.
+       const session = {
+         geometry, sensors, physics, evaluationCases, 
+         genConfig, maxFields, cadData
+       };
+       localStorage.setItem('safetystudio_session_v1', JSON.stringify(session));
+     } catch (e) {
+       if (e && e.name === 'QuotaExceededError') {
+         console.warn('Session save skipped: localStorage quota exceeded.');
+       } else {
+         console.error('Session save failed:', e);
+       }
+     }
+  }, [geometry, sensors, physics, evaluationCases, genConfig, maxFields, cadData]);
 
   const clearSession = () => {
     if (window.confirm("Are you sure you want to clear all session data? This cannot be undone.")) {
