@@ -334,4 +334,4 @@ class SafetyMath:
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return None, str(e), [], [], 0.0, [], None, None
+            return None, [], [], [], 0.0, [], None, None
