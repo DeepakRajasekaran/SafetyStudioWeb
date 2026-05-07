@@ -62,7 +62,7 @@ const Help = () => {
 
   const matrixImages = [
     { src: '/help/manual/physics_and_matrix_generator1.png', title: 'Physics Config', alt: 'Physics', caption: 'Setting deceleration and reaction time parameters.' },
-    { src: '/help/manual/physics_and_matrix_generator2.png', title: 'Generation Config', alt: 'Gen Config', caption:  'Choosing methodology (Sweep Union vs Hybrid) and enabling shadow generation.'},
+    { src: '/help/manual/physics_and_matrix_generator2.png', title: 'Generation Config', alt: 'Gen Config', caption:  'Choosing methodology (Sweep Union vs Hybrid), enabling shadow generation, and toggling hull polygon sweeps.'},
     { src: '/help/manual/physics_and_matrix_generator3.png', title: 'Field Methodology', alt: 'Methodology', caption: 'Selecting motion types and intensity levels.' },
     { src: '/help/manual/generated_cases_from_evalMatrix.png', title: 'Generated Cases', alt: 'Cases', caption: 'The finalized library of motion profiles.' }
   ];
@@ -181,7 +181,9 @@ const Help = () => {
             The <strong>Evaluation Matrix</strong> serves as the central hub for defining the robot's dynamic safety constraints. 
             This phase involves configuring critical <strong>Physics parameters</strong> (deceleration, reaction time), 
             selecting the <strong>Generation Methodology</strong> (Sweep Union vs Hybrid), and enabling 
-            <strong>Shadow Generation</strong> to account for physical obstructions caused by the payload. Once the 
+            <strong>Shadow Generation</strong> to account for physical obstructions caused by the payload. 
+            Additionally, you can toggle <strong>Hull Polygon Sweep</strong> to use a simplified convex 
+            hull of the combined robot and payload geometry as the sweep base. Once the 
             constraints are set, the system automatically generates a complete library of motion profiles, 
             populating the matrix with validated safety cases ready for inspection.
           </p>
