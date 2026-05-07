@@ -80,19 +80,12 @@ def calculate_case():
 
         print(f"DEBUG: Processing {load_key} case with P: {P} | Custom: {bool(override_poly)}")
         
-        try:
-            final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union = SafetyMath.calc_case(
-                footprint, load_poly, sensors, v, w_input, P, override_poly=override_poly
-            )
-        except Exception as solver_err:
-            print(f"CRITICAL: Solver failed: {solver_err}")
-            import traceback
-            traceback.print_exc()
-            # Safety Fallback: recalculate without override if merge failed
-            final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union = SafetyMath.calc_case(
-                footprint, load_poly, sensors, v, w_input, P
-            )
-            print("INFO: Reverted to physics fallback field.")
+        final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union = SafetyMath.calc_case(
+            footprint, load_poly, sensors, v, w_input, P, override_poly=override_poly
+        )
+
+        if final is None:
+            return jsonify({"success": False, "error": "Calculation failed in solver engine."}), 200
 
         lidar_data = []
         if lid_out:

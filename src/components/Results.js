@@ -418,13 +418,23 @@ const Results = ({ globals }) => {
   };
 
   const handleCalculate = async (targetCaseArg = null) => {
-    const k = targetCaseArg || evaluationCases.find(c => c.id === selectedCaseId);
+    // Check if targetCaseArg is an event object (from onClick) rather than a case object
+    const isValidCase = targetCaseArg && targetCaseArg.id !== undefined;
+    let k = isValidCase ? targetCaseArg : evaluationCases.find(c => c.id === selectedCaseId);
+    if (!k && evaluationCases.length > 0) k = evaluationCases[0];
     if (!k || !geometry.FootPrint) return;
     setIsCalculating(true);
     pushToHistory();
     try {
       const res = await axios.post('/api/calculate', buildPayload(k));
-      if (res.data.success) setResults(prev => ({ ...prev, [k.id]: res.data }));
+      if (res.data.success) {
+        setResults(prev => ({ ...prev, [k.id]: res.data }));
+      } else {
+        alert("Calculation failed: " + (res.data.error || "Unknown error"));
+      }
+    } catch (err) {
+      console.error("Calculation Error:", err);
+      alert("Network or Server error during calculation.");
     } finally { setIsCalculating(false); }
   };
 

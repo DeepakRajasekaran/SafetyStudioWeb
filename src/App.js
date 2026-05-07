@@ -22,7 +22,7 @@ function App() {
   const [activeTab, setActiveTab] = useState("Home");
   const [activeTool, setActiveTool] = useState("select");
   const [selectedSensorIndex, setSelectedSensorIndex] = useState(null);
-  const [selectedCaseId, setSelectedCaseId] = useState(null);
+  const [selectedCaseId, setSelectedCaseId] = useState(1);
 
   // --- GLOBAL STATE ---
   
