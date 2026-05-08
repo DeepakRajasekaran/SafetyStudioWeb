@@ -1,29 +1,29 @@
-# SafetyStudioWeb 🛡️🤖
+# SafetyStudioWeb
 
-**SafetyStudioWeb** is a professional engineering platform designed to automate the configuration of safety fields for Autonomous Mobile Robots (AMRs) and Automated Guided Vehicles (AGVs). It bridges the gap between mechanical CAD design and functional safety deployment.
+SafetyStudioWeb is a professional engineering platform designed to automate the configuration of safety fields for Autonomous Mobile Robots (AMRs) and Automated Guided Vehicles (AGVs). It bridges the gap between mechanical CAD design and functional safety deployment.
 
-## 🚀 Overview
+## Overview
 
 Configuring safety LiDARs (like SICK or Leuze) for mobile robots is traditionally a manual, error-prone process. SafetyStudioWeb automates this by using kinematic motion models to calculate precise "protective zones" (Safety Fields) based on the robot's real-world physics, payload geometry, and environment.
 
 ### Key Features
 
-- **📐 CAD Integration**: Import robot footprints and environment geometry directly from DXF files.
-- **🕒 Kinematic Modeling**: Calculate safety fields based on:
-  - Velocity ($v$) and Angular Velocity ($\omega$)
-  - Braking Acceleration ($a_c$)
-  - System Response Time ($t_r$)
-  - Safety Margins ($d_s$)
-- **🌑 Shadow Generation**: Automatically detect and compensate for sensor occlusions caused by the robot's own structure or payload.
-- **🛠️ Parametric Sketching**: Built-in 2D editor for defining and refining robot geometry.
-- **📥 Hardware Export**: Generate vendor-specific configuration files:
-  - **SICK**: `.sdxml` and `.casesxml` formats.
-  - **Leuze**: `.csv` point clouds.
-- **🐳 Containerized**: Ready for deployment via Docker and Docker Compose.
+- **CAD Integration**: Import robot footprints and environment geometry directly from DXF files.
+- **Kinematic Modeling**: Calculate safety fields based on:
+  - Velocity (v) and Angular Velocity (w)
+  - Braking Acceleration (ac)
+  - System Response Time (tr)
+  - Safety Margins (ds)
+- **Shadow Generation**: Automatically detect and compensate for sensor occlusions caused by the robot's own structure or payload.
+- **Parametric Sketching**: Built-in 2D editor for defining and refining robot geometry.
+- **Hardware Export**: Generate vendor-specific configuration files:
+  - **SICK**: .sdxml and .casesxml formats.
+  - **Leuze**: .csv point clouds.
+- **Containerized**: Ready for deployment via Docker and Docker Compose.
 
 ---
 
-## 🛠️ Tech Stack
+## Tech Stack
 
 - **Frontend**: React, Konva (Canvas API), Axios
 - **Backend**: Python (Flask), Shapely (Geometric Solver), NumPy, ezdxf
@@ -31,7 +31,7 @@ Configuring safety LiDARs (like SICK or Leuze) for mobile robots is traditionall
 
 ---
 
-## 🚦 Getting Started
+## Getting Started
 
 ### Prerequisites
 
@@ -66,7 +66,7 @@ Access the application at `http://localhost`.
 
 ---
 
-## 📖 How it Works
+## How it Works
 
 1. **Phase 1: Editor**: Define your robot's footprint and any static loads. Configure your LiDAR sensor positions and FOVs.
 2. **Phase 2: Matrix**: Define your "Evaluation Matrix"—a grid of speed/angle combinations the robot will operate in.
@@ -76,7 +76,7 @@ Access the application at `http://localhost`.
 
 ---
 
-## 📁 Project Structure
+## Project Structure
 
 ```text
 .
@@ -94,9 +94,6 @@ Access the application at `http://localhost`.
 
 ---
 
-## 📄 License
+## License
 
-This project is proprietary. All rights reserved.
-
----
-*Built with ❤️ for the future of Safe Robotics.*
+This project is licensed under the MIT License.
