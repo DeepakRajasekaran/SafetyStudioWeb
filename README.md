@@ -1,6 +1,6 @@
 # SafetyStudioWeb
 
-SafetyStudioWeb is a professional engineering platform designed to automate the configuration of safety fields for Autonomous Mobile Robots (AMRs) and Automated Guided Vehicles (AGVs). It bridges the gap between mechanical CAD design and functional safety deployment.
+SafetyStudioWeb is a professional engineering platform designed to automate the configuration of safety fields for Autonomous Mobile Robots (AMRs) and Automated Guided Vehicles (AGVs). It bridges the gap between CAD sketching and functional safety deployment.
 
 ## Overview
 
