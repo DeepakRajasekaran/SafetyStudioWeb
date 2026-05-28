@@ -22,7 +22,10 @@ import {
   Subtract, 
   Lock,
   PencilSimple,
-  X
+  X,
+  Polygon,
+  Eye,
+  EyeClosed
 } from '@phosphor-icons/react';
 import axios from 'axios';
 import { parseWktToKonva } from '../utils/wktParser';
@@ -46,9 +49,11 @@ const Editor = ({ globals, setActiveTab }) => {
   
   const [isConstructionMode, setIsConstructionMode] = useState(false);
   const [isSubtractionMode, setIsSubtractionMode] = useState(false);
+  const [isUnionMode, setIsUnionMode] = useState(false);
   const [showFootPrint, setShowFootPrint] = useState(true);
   const [showL1, setShowL1]   = useState(true);
   const [showL2, setShowL2]   = useState(true);
+  const [hoveredEntity, setHoveredEntity] = useState(null);
   const [isSketchingMode, setIsSketchingMode] = useState(false);
   const [formData, setFormData] = useState({
     name: 'New Sensor', x: 0, y: 0, mount: 0, fov: 270, r: 10, dia: 150, flipped: false, locked: false
@@ -182,6 +187,8 @@ const Editor = ({ globals, setActiveTab }) => {
             setIsConstructionMode={setIsConstructionMode}
             isSubtractionMode={isSubtractionMode}
             setIsSubtractionMode={setIsSubtractionMode}
+            isUnionMode={isUnionMode}
+            setIsUnionMode={setIsUnionMode}
             undo={undo}
             handleClearSketch={handleClearSketch}
           >
@@ -213,17 +220,29 @@ const Editor = ({ globals, setActiveTab }) => {
           {({ scale: canvasScale, setOverlay }) => (
             <Layer ref={layerRef}>
               {/* FootPrint */}
-              {parsedFP.map((pts, i) => (
-                <Line key={`fp-${i}`} points={pts} fill="rgba(153,153,153,0.4)" closed stroke="#888" strokeWidth={1 / canvasScale} />
-              ))}
+              {parsedFP.map((pts, i) => {
+                const meta = cadData?.FootPrint?.entityMeta?.[i] || {};
+                const isVisible = meta.visible !== false;
+                const isHovered = hoveredEntity === `FootPrint-${i}`;
+                if (!isVisible) return null;
+                return <Line key={`fp-${i}`} points={pts} fill={isHovered ? "rgba(153,153,153,0.8)" : "rgba(153,153,153,0.4)"} closed stroke={isHovered ? "#fff" : "#888"} strokeWidth={(isHovered ? 2 : 1) / canvasScale} />
+              })}
               {/* Load 1 */}
-              {parsedL1.map((pts, i) => (
-                <Line key={`l1-${i}`} points={pts} fill="rgba(33,150,243,0.4)" closed stroke="#2196F3" strokeWidth={1 / canvasScale} />
-              ))}
+              {parsedL1.map((pts, i) => {
+                const meta = cadData?.Load1?.entityMeta?.[i] || {};
+                const isVisible = meta.visible !== false;
+                const isHovered = hoveredEntity === `Load1-${i}`;
+                if (!isVisible) return null;
+                return <Line key={`l1-${i}`} points={pts} fill={isHovered ? "rgba(33,150,243,0.8)" : "rgba(33,150,243,0.4)"} closed stroke={isHovered ? "#fff" : "#2196F3"} strokeWidth={(isHovered ? 2 : 1) / canvasScale} />
+              })}
               {/* Load 2 */}
-              {parsedL2.map((pts, i) => (
-                <Line key={`l2-${i}`} points={pts} fill="rgba(76,175,80,0.4)" closed stroke="#4CAF50" strokeWidth={1 / canvasScale} />
-              ))}
+              {parsedL2.map((pts, i) => {
+                const meta = cadData?.Load2?.entityMeta?.[i] || {};
+                const isVisible = meta.visible !== false;
+                const isHovered = hoveredEntity === `Load2-${i}`;
+                if (!isVisible) return null;
+                return <Line key={`l2-${i}`} points={pts} fill={isHovered ? "rgba(76,175,80,0.8)" : "rgba(76,175,80,0.4)"} closed stroke={isHovered ? "#fff" : "#4CAF50"} strokeWidth={(isHovered ? 2 : 1) / canvasScale} />
+              })}
               {/* CAD Sketches */}
               {isSketchingMode && (
                   <CADSketcher 
@@ -244,6 +263,7 @@ const Editor = ({ globals, setActiveTab }) => {
                     setOverlay={setOverlay}
                     isConstructionMode={isConstructionMode}
                     isSubtractionMode={isSubtractionMode}
+                    isUnionMode={isUnionMode}
                   />
               )}
 
@@ -405,11 +425,64 @@ const Editor = ({ globals, setActiveTab }) => {
               <button className="btn-red" title="Clear both DXF and Sketch" onClick={() => {
                  handleClear(key);
                  setCadFieldSafe(key, null, 'sketches', []);
+                 setCadFieldSafe(key, null, 'constraints', []);
+                 setCadFieldSafe(key, null, 'dimensions', []);
+                 setCadFieldSafe(key, null, 'fixedPoints', []);
+                 setCadFieldSafe(key, null, 'entityMeta', []);
               }} style={{ padding: 0, flex: 1, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 <X size={14} weight="bold" />
               </button>
             </div>
           ))}
+        </div>
+
+        {/* Entity Tree */}
+        <div className="panel-section">
+          <div className="panel-title">Entity Tree</div>
+          {['FootPrint', 'Load1', 'Load2'].map((key) => {
+             const parsed = key === 'FootPrint' ? parsedFP : key === 'Load1' ? parsedL1 : parsedL2;
+             if (!parsed || parsed.length === 0) return null;
+             
+             return (
+               <div key={`tree-${key}`} style={{ marginBottom: 12 }}>
+                 <div style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#ccc', marginBottom: 4 }}>{key}</div>
+                 {parsed.map((_, idx) => {
+                    const isLoad = key.startsWith('Load');
+                    const meta = cadData?.[key]?.entityMeta?.[idx] || { castShadow: true };
+                    return (
+                      <div key={idx} 
+                           onMouseEnter={() => setHoveredEntity(`${key}-${idx}`)}
+                           onMouseLeave={() => setHoveredEntity(null)}
+                           style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '4px 8px', background: hoveredEntity === `${key}-${idx}` ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)', borderRadius: 4, marginBottom: 2, transition: 'background 0.2s' }}>
+                        <div style={{ fontSize: '0.75rem', color: '#aaa', display: 'flex', alignItems: 'center', gap: 6 }}>
+                           <button onClick={() => {
+                               const newMeta = [...(cadData?.[key]?.entityMeta || [])];
+                               const currentVisible = meta.visible !== false;
+                               newMeta[idx] = { ...newMeta[idx], visible: !currentVisible };
+                               setCadFieldSafe(key, null, 'entityMeta', newMeta);
+                           }} style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: meta.visible !== false ? '#fff' : '#555', padding: 0, display: 'flex', alignItems: 'center' }}>
+                             {meta.visible !== false ? <Eye size={14} /> : <EyeClosed size={14} />}
+                           </button>
+                           <Polygon size={14} weight="fill" color={key === 'FootPrint' ? '#999' : key === 'Load1' ? '#2196F3' : '#4CAF50'} />
+                           Entity {idx + 1}
+                        </div>
+                        {isLoad && (
+                           <label style={{ fontSize: '0.65rem', color: '#888', display: 'flex', alignItems: 'center', gap: 4, cursor: 'pointer' }}>
+                             <input type="checkbox" checked={meta.castShadow !== false} 
+                                onChange={(e) => {
+                                   const newMeta = [...(cadData?.[key]?.entityMeta || [])];
+                                   newMeta[idx] = { ...newMeta[idx], castShadow: e.target.checked };
+                                   setCadFieldSafe(key, null, 'entityMeta', newMeta);
+                                }} style={{ accentColor: '#00e5ff' }} />
+                             Shadow
+                           </label>
+                        )}
+                      </div>
+                    );
+                 })}
+               </div>
+             );
+          })}
         </div>
 
       </div>

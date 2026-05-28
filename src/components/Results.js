@@ -413,7 +413,8 @@ const Results = ({ globals }) => {
       w: parseFloat(k.w) || 0,
       load: k.load,
       custom_field_wkt: k.custom_dxf || null,
-      physics_params: sanitizedPhysics
+      physics_params: sanitizedPhysics,
+      entity_meta: cadData?.[k.load]?.entityMeta || []
     };
   };
 
@@ -917,7 +918,24 @@ const Results = ({ globals }) => {
         <div style={{ width: 1, background: 'rgba(255,255,255,0.1)', height: 16, marginLeft: 4, marginRight: 4 }} />
 
         {viewMode === 'Composite' && !isEditingMask && (
-          <button onClick={() => setIsEditMode(!isEditMode)} className={`toolbar-action-btn ${isEditMode ? 'danger' : 'primary'}`} style={{ minWidth: 90, justifyContent: 'center', gap: 6 }}>
+          <button onClick={async () => {
+            if (isEditMode && resultsMode === 'polygon') {
+                const finalWkt = currentResult?.final_field_wkt;
+                if (finalWkt) {
+                  const updatedCases = [...evaluationCases];
+                  const idx = updatedCases.findIndex(c => c.id === selectedCaseId);
+                  if (idx !== -1) {
+                    updatedCases[idx] = { ...updatedCases[idx], custom_dxf: finalWkt };
+                    pushToHistory();
+                    setEvaluationCases(updatedCases);
+                    await handleCalculate(updatedCases[idx]);
+                  }
+                }
+                setIsEditMode(false);
+            } else {
+                setIsEditMode(!isEditMode);
+            }
+          }} className={`toolbar-action-btn ${isEditMode ? 'danger' : 'primary'}`} style={{ minWidth: 90, justifyContent: 'center', gap: 6 }}>
             {isEditMode ? (resultsMode === 'cad' ? 'EXIT' : 'DONE') : <><PencilSimple size={14} weight="fill" /> EDIT</>}
           </button>
         )}
