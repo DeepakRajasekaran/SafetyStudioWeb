@@ -80,8 +80,9 @@ def calculate_case():
 
         print(f"DEBUG: Processing {load_key} case with P: {P} | Custom: {bool(override_poly)}")
         
+        entity_meta = data.get('entity_meta', {})
         final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union = SafetyMath.calc_case(
-            footprint, load_poly, sensors, v, w_input, P, override_poly=override_poly
+            footprint, load_poly, sensors, v, w_input, P, override_poly=override_poly, entity_meta=entity_meta
         )
 
         if final is None:

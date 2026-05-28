@@ -238,7 +238,7 @@ function DimOverlay({ x, y, value, onCommit, onCancel }) {
   );
 }
 
-const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDimensions, fixedPoints, setFixedPoints, constraints = [], setConstraints, setCadBatchSafe, referenceVertices = [], pushToHistory, scale, SCALE_M, activeTool, setOverlay, isConstructionMode, isSubtractionMode }, ref) => {
+const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDimensions, fixedPoints, setFixedPoints, constraints = [], setConstraints, setCadBatchSafe, referenceVertices = [], pushToHistory, scale, SCALE_M, activeTool, setOverlay, isConstructionMode, isSubtractionMode, isUnionMode }, ref) => {
   // 1. Foundation State & Refs (Must be first to avoid TDZ ReferenceErrors in dependency arrays)
   const [newShape, setNewShape] = useState(null);
   const [dimSelection, setDimSelection] = useState([]);
@@ -938,7 +938,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
     }
 
     if (activeTool === 'line' || activeTool === 'circle' || activeTool === 'rect' || activeTool === 'sector') {
-      const shapeProps = { construction: isConstructionMode, op: isSubtractionMode ? 'subtract' : 'union' };
+      const shapeProps = { construction: isConstructionMode, op: isSubtractionMode ? 'subtract' : (isUnionMode ? 'union' : 'add') };
       
       if (drawingState.current.step === 0) {
         drawingState.current = { step: 1, isDragging: false, startPos: { x: pos.x, y: pos.y }, startSnap: snapMeta, lastClickTime: drawingState.current.lastClickTime };
@@ -991,7 +991,7 @@ const CADSketcher = React.forwardRef(({ sketches, setSketches, dimensions, setDi
         finalizeShape(snapped);
       }
     }
-  }, [activeTool, snapPos, sketches, dimSelection, constraintSelection, SCALE_M, setOverlay, fixedPoints, dimensions, setSketches, pushToHistory, isConstructionMode, isSubtractionMode, newShape, finalizeShape]);
+  }, [activeTool, snapPos, sketches, dimSelection, constraintSelection, SCALE_M, setOverlay, fixedPoints, dimensions, setSketches, pushToHistory, isConstructionMode, isSubtractionMode, isUnionMode, newShape, finalizeShape]);
 
   const handleMouseMove = useCallback((e) => {
     if (activeTool === 'select') {

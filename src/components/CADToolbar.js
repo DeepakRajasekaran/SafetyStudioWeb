@@ -11,6 +11,8 @@ const CADToolbar = ({
   setIsConstructionMode,
   isSubtractionMode,
   setIsSubtractionMode,
+  isUnionMode,
+  setIsUnionMode,
   undo,
   handleClearSketch,
   onConstructionClick,
@@ -29,9 +31,13 @@ const CADToolbar = ({
         style={{ background: isConstructionMode ? '#5c4d1a' : 'transparent', color: isConstructionMode ? '#ff9800' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
          <Hammer size={16} weight="bold" />
       </button>
-      <button onClick={() => setIsSubtractionMode(!isSubtractionMode)} title="Toggle Subtraction Mode (Removal)"
+      <button onClick={() => { setIsSubtractionMode(!isSubtractionMode); if(!isSubtractionMode) setIsUnionMode(false); }} title="Toggle Subtraction Mode (Removal)"
         style={{ background: isSubtractionMode ? '#5c1a1a' : 'transparent', color: isSubtractionMode ? '#ff5252' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
          <Subtract size={16} weight="fill" />
+      </button>
+      <button onClick={() => { setIsUnionMode(!isUnionMode); if(!isUnionMode) setIsSubtractionMode(false); }} title="Toggle Union Mode"
+        style={{ background: isUnionMode ? '#1a4a25' : 'transparent', color: isUnionMode ? '#4CAF50' : '#888', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>
+         <SelectionPlus size={16} weight="fill" />
       </button>
       <button onClick={() => setActiveTool('line')} title="Line"
         style={{ background: activeTool === 'line' ? '#1a3a5c' : 'transparent', color: 'white', border: 'none', padding: '4px', cursor: 'pointer', borderRadius: 4 }}>

@@ -30,9 +30,9 @@ function App() {
     geometry: { FootPrint: null, Load1: null, Load2: null },
     sensors: [],
     physics: {
-      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false },
-      Load1:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false },
-      Load2:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, shadow: true, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false }
+      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false },
+      Load1:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false },
+      Load2:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false }
     },
     evaluationCases: [
       { id: 1, load: 'NoLoad', v: 1.0, w: 0.0, type: 'std' },
@@ -50,9 +50,9 @@ function App() {
     results: {},
     fieldsets: [],
     cadData: {
-      FootPrint: { sketches: [], dimensions: [], fixedPoints: [], constraints: [] },
-      Load1:     { sketches: [], dimensions: [], fixedPoints: [], constraints: [] },
-      Load2:     { sketches: [], dimensions: [], fixedPoints: [], constraints: [] },
+      FootPrint: { sketches: [], dimensions: [], fixedPoints: [], constraints: [], entityMeta: [] },
+      Load1:     { sketches: [], dimensions: [], fixedPoints: [], constraints: [], entityMeta: [] },
+      Load2:     { sketches: [], dimensions: [], fixedPoints: [], constraints: [], entityMeta: [] },
       Overrides: {}
     },
     maxFields: 128

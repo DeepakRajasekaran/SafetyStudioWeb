@@ -70,7 +70,7 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
            parseFloat((p[0] / SCALE_M).toFixed(6)),
            parseFloat((-(p[1] / SCALE_M)).toFixed(6))
         ]);
-        polys.push([[pts]]);
+        polys.push([pts]);
       }
     }
 
@@ -96,7 +96,7 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
           pts.push([parseFloat(x.toFixed(6)), parseFloat(y.toFixed(6))]);
       }
       pts.push(pts[0]);
-      return [[pts]]; // MultiPolygon
+      return [pts];
     }
     if (sketch.type === 'rect') {
       const [x1, y1] = sketch.start;
@@ -106,7 +106,7 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
         parseFloat((px / SCALE_M).toFixed(6)), 
         parseFloat((-(py / SCALE_M)).toFixed(6))
       ]);
-      return [[pts]]; // MultiPolygon
+      return [pts];
     }
     if (sketch.type === 'sector') {
       const [cx, cy] = sketch.center;
@@ -128,7 +128,7 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
           pts.push([parseFloat(x.toFixed(6)), parseFloat(y.toFixed(6))]);
       }
       pts.push(pts[0]); // close loop
-      return [[pts]];
+      return [pts];
     }
     return null;
   };
@@ -147,34 +147,26 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
     return [];
   };
 
-  const additiveSketches = activeSketches.filter(s => s.op !== 'subtract');
+  const unionSketches = activeSketches.filter(s => s.op === 'union');
+  const separateSketches = activeSketches.filter(s => s.op !== 'subtract' && s.op !== 'union');
   const subtractiveSketches = activeSketches.filter(s => s.op === 'subtract');
 
-  const allAdditiveLines = [
-    ...additiveSketches.filter(s => s.type === 'line'),
-    ...additiveSketches.flatMap(getLinesFromShape)
+  const unionPolys = [
+    ...unionSketches.filter(s => s.type === 'circle' || s.type === 'rect' || s.type === 'sector').map(getPolyCoords).filter(Boolean),
+    ...linesToPolys(unionSketches.filter(s => s.type === 'line'))
   ];
 
-  const allSubtractiveLines = [
-    ...subtractiveSketches.filter(s => s.type === 'line'),
-    ...subtractiveSketches.flatMap(getLinesFromShape)
-  ];
-
-  const additive = [
-    // 1. Standard shapes (robust handling)
-    ...additiveSketches.filter(s => s.type === 'circle' || s.type === 'rect' || s.type === 'sector').map(getPolyCoords).filter(Boolean),
-    // 2. Custom line loops
-    ...linesToPolys(allAdditiveLines)
+  const separatePolys = [
+    ...separateSketches.filter(s => s.type === 'circle' || s.type === 'rect' || s.type === 'sector').map(getPolyCoords).filter(Boolean),
+    ...linesToPolys(separateSketches.filter(s => s.type === 'line'))
   ];
 
   const subtractive = [
-    // 1. Standard shapes (robust handling)
     ...subtractiveSketches.filter(s => s.type === 'circle' || s.type === 'rect' || s.type === 'sector').map(getPolyCoords).filter(Boolean),
-    // 2. Custom line loops
-    ...linesToPolys(allSubtractiveLines)
+    ...linesToPolys(subtractiveSketches.filter(s => s.type === 'line'))
   ];
 
-  if (additive.length === 0 && subtractive.length === 0) {
+  if (unionPolys.length === 0 && separatePolys.length === 0 && subtractive.length === 0) {
     if (sketches.some(s => s.construction)) {
        return { wkt: null, error: "No closed loops found. (Note: Construction lines are ignored for field boundaries; try converting them to standard lines if they are part of the perimeter.)" };
     }
@@ -182,26 +174,55 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
   }
 
   try {
-    // 1. Union all additive shapes, or initialize empty if none
-    const hasAdditive = additive.length > 0;
-    let result = hasAdditive ? union(...additive) : [];
+    let basePolys = [];
 
-    // 2. Iteratively subtract removal shapes
-    subtractive.forEach(subPoly => {
-      if (hasAdditive) {
-        if (result.length > 0) {
-          result = difference(result, subPoly);
+    if (unionPolys.length > 0) {
+      try {
+        const unioned = union(...unionPolys);
+        if (unioned && unioned.length > 0) {
+          basePolys.push(...unioned);
         }
-      } else {
-        // If no additive shapes, the union of subtractive shapes themselves becomes the result
-        // This is useful for callers like Results.js that perform their own secondary booleans
-        result = result.length === 0 ? subPoly : union(result, subPoly);
+      } catch (err) {
+        console.warn("CAD To WKT: Union operation failed (likely due to self-intersection). Falling back to separate entities.", err);
+        basePolys.push(...unionPolys);
       }
-    });
+    }
+
+    if (separatePolys.length > 0) {
+      basePolys.push(...separatePolys);
+    }
+
+    let result = [];
+    if (basePolys.length > 0) {
+      basePolys.forEach(poly => {
+        let currentArray = [poly]; // treat as MultiPolygon
+        subtractive.forEach(subPoly => {
+          if (currentArray.length > 0) {
+            try {
+              currentArray = difference(currentArray, subPoly);
+            } catch (err) {
+              console.warn("CAD To WKT: Difference operation failed. Skipping this subtractive shape.", err);
+            }
+          }
+        });
+        result.push(...currentArray);
+      });
+    } else {
+      // If no additive shapes, the union of subtractive shapes themselves becomes the result
+      let currentArray = [];
+      subtractive.forEach(subPoly => {
+        try {
+          currentArray = currentArray.length === 0 ? [subPoly] : union(currentArray, subPoly);
+        } catch (err) {
+          console.warn("CAD To WKT: Subtractive union failed.", err);
+          if (currentArray.length === 0) currentArray = [subPoly];
+        }
+      });
+      result.push(...currentArray);
+    }
 
     if (!result || result.length === 0) {
-      if (additive.length > 0) return { wkt: null, error: "The resulting polygon is empty (everything might have been subtracted)." };
-      // If we only had subtractive shapes and result is still empty, it shouldn't happen due to loop above, but safety check:
+      if (unionPolys.length > 0 || separatePolys.length > 0) return { wkt: null, error: "The resulting polygon is empty (everything might have been subtracted)." };
       return { wkt: null, error: "No valid geometry resolved." };
     }
 
@@ -227,7 +248,7 @@ export const sketchesToWkt = (sketches, SCALE_M) => {
     return { wkt: finalWkt, error: null };
 
   } catch (err) {
-    console.error("Boolean Operation failed:", err);
-    return { wkt: null, error: "Geometry Error: Could not resolve overlapping shapes. Ensure your sketch isn't overly complex or self-intersecting." };
+    console.error("Critical CAD Export Error:", err);
+    return { wkt: null, error: "Geometry Error: A critical failure occurred while exporting. Ensure your sketch isn't overly complex." };
   }
 };
