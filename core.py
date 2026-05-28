@@ -159,7 +159,7 @@ class SafetyMath:
         return Polygon(pts, poly.interiors)
 
     @staticmethod
-    def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None):
+    def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None, entity_meta=None):
         try:
             # 1. Geometry Prep
             sw_union = None
@@ -267,15 +267,31 @@ class SafetyMath:
                         if sh: lidar_shadows.append(sh)
                 
                 if lidar_shadows: clip = clip.difference(unary_union(lidar_shadows))
-                if load_poly and P.get('shadow', True): clip = clip.difference(load_poly)
+                # Only clip out load if it is a single polygon that casts shadow, or subtract piece by piece
+                # To simplify, we clip FOV by all load polygons (shadow casting ones)
+                # Wait, FOV clipping is separate from shadow wedge.
+                
+                shadows_to_merge = []
+                if load_poly:
+                    geoms = load_poly.geoms if hasattr(load_poly, 'geoms') else [load_poly]
+                    for idx, g in enumerate(geoms):
+                        casts_shadow = True
+                        if entity_meta and idx < len(entity_meta):
+                            meta_item = entity_meta[idx]
+                            if isinstance(meta_item, dict):
+                                casts_shadow = meta_item.get('castShadow', True)
+                        
+                        if casts_shadow:
+                            shadows_to_merge.append(SafetyMath.get_shadow_wedge(og, g, max_r*1.1))
+
+                # Remove shadow wedges
+                valid_shadows = [sh for sh in shadows_to_merge if sh]
+                shadow = unary_union(valid_shadows) if valid_shadows else None
                 
                 composite_clips.append(clip)
                 
-                shadow = None
                 clip_indiv = clip
-                if load_poly and P.get('shadow', True):
-                    shadow = SafetyMath.get_shadow_wedge(og, load_poly, max_r*1.1)
-                    if shadow: clip_indiv = clip.difference(shadow)
+                if shadow: clip_indiv = clip.difference(shadow)
 
                 if clip_indiv.geom_type in ('MultiPolygon', 'GeometryCollection'):
                     polys = [g for g in getattr(clip_indiv, 'geoms', []) if g.geom_type == 'Polygon']

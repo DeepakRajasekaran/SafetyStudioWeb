@@ -62,7 +62,7 @@ const Help = () => {
 
   const matrixImages = [
     { src: '/help/manual/physics_and_matrix_generator1.png', title: 'Physics Config', alt: 'Physics', caption: 'Setting deceleration and reaction time parameters.' },
-    { src: '/help/manual/physics_and_matrix_generator2.png', title: 'Generation Config', alt: 'Gen Config', caption:  'Choosing methodology (Sweep Union vs Hybrid), enabling shadow generation, and toggling hull polygon sweeps.'},
+    { src: '/help/manual/physics_and_matrix_generator2.png', title: 'Generation Config', alt: 'Gen Config', caption:  'Choosing methodology (Sweep Union vs Hybrid), and toggling hull polygon sweeps.'},
     { src: '/help/manual/physics_and_matrix_generator3.png', title: 'Field Methodology', alt: 'Methodology', caption: 'Selecting motion types and intensity levels.' },
     { src: '/help/manual/generated_cases_from_evalMatrix.png', title: 'Generated Cases', alt: 'Cases', caption: 'The finalized library of motion profiles.' }
   ];
@@ -107,7 +107,6 @@ const Help = () => {
             <a href="#mask-mgmt">4.1. Global Mask Management</a>
             <a href="#poly-edit">4.2. Polygon Editing</a>
             <a href="#cad-refinement">4.3. CAD Refinement</a>
-            <a href="#shadow-gen">4.4. Shadow Generation</a>
           </div>
           <a href="#phase4-export">5. Phase 4: Hardware Export</a>
 
@@ -139,7 +138,7 @@ const Help = () => {
           <h3 id="geometry-flow">2.1. Geometry Workflow</h3>
           <p>
             Start with the <strong>Footprint</strong> to define the base robot. Then, add <strong>Loads</strong> 
-            which represent payloads. These loads are critical for calculating sensor shadows.
+            which represent payloads.
           </p>
 
           <h3 id="sketching">2.2. CAD Sketching</h3>
@@ -180,8 +179,7 @@ const Help = () => {
           <p>
             The <strong>Evaluation Matrix</strong> serves as the central hub for defining the robot's dynamic safety constraints. 
             This phase involves configuring critical <strong>Physics parameters</strong> (deceleration, reaction time), 
-            selecting the <strong>Generation Methodology</strong> (Sweep Union vs Hybrid), and enabling 
-            <strong>Shadow Generation</strong> to account for physical obstructions caused by the payload. 
+            and selecting the <strong>Generation Methodology</strong> (Sweep Union vs Hybrid). 
             Additionally, you can toggle <strong>Hull Polygon Sweep</strong> to use a simplified convex 
             hull of the combined robot and payload geometry as the sweep base. Once the 
             constraints are set, the system automatically generates a complete library of motion profiles, 
@@ -217,16 +215,6 @@ const Help = () => {
             and Subtraction (carving out area).
           </p>
           <ImageCarousel images={cadEditImages} />
-
-          <h3 id="shadow-gen">4.4. Shadow Generation Visualization</h3>
-          <p>
-            The system automatically performs <strong>Shadow Generation</strong> where 
-            the load obstructs the sensor's line of sight.
-          </p>
-          <div className="screenshot-container">
-            <img src="/help/manual/generated_shadow_for_load2.png" alt="Shadows" />
-            <p className="screenshot-caption">Shadow Generation: Identifying blind spots caused by the payload.</p>
-          </div>
         </div>
 
         <hr className="doc-divider" />
