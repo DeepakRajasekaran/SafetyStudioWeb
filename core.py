@@ -162,6 +162,10 @@ class SafetyMath:
     def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None, entity_meta=None):
         try:
             # 1. Geometry Prep
+            if footprint and not footprint.is_valid: footprint = footprint.buffer(0)
+            if load_poly and not load_poly.is_valid: load_poly = load_poly.buffer(0)
+            if override_poly and not override_poly.is_valid: override_poly = override_poly.buffer(0)
+
             sw_union = None
             raw_footprint_poly = footprint
             lat_scale = P.get('lat_scale', 1.0)

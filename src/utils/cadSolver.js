@@ -169,7 +169,7 @@ function resolvePosition(particles, v, sketches) {
  * For real particles: apply directly. For virtual midpoints: split delta to both parents.
  */
 function applyDelta(particles, resolved, dx, dy, stepScale = STEP) {
-  if (!resolved || resolved.fixed) return;
+  if (!resolved || resolved.fixed || isNaN(dx) || isNaN(dy) || !Number.isFinite(dx) || !Number.isFinite(dy)) return;
 
   if (resolved.sectorMidArc) {
     // mid_arc movement: prefer translation (move center) if center is free.
@@ -274,13 +274,13 @@ function solveIteration(particles, constraints, dimensions, sketches) {
         const ratio = targetR / r1;
         const targetSx = c.x + (start.x - c.x) * ratio;
         const targetSy = c.y + (start.y - c.y) * ratio;
-        if (!start.fixed) { start.x += (targetSx - start.x) * STEP; start.y += (targetSy - start.y) * STEP; }
+        if (!start.fixed && Number.isFinite(targetSx) && Number.isFinite(targetSy)) { start.x += (targetSx - start.x) * STEP; start.y += (targetSy - start.y) * STEP; }
       }
       if (r2 > 1e-6) {
         const ratio = targetR / r2;
         const targetEx = c.x + (end.x - c.x) * ratio;
         const targetEy = c.y + (end.y - c.y) * ratio;
-        if (!end.fixed) { end.x += (targetEx - end.x) * STEP; end.y += (targetEy - end.y) * STEP; }
+        if (!end.fixed && Number.isFinite(targetEx) && Number.isFinite(targetEy)) { end.x += (targetEx - end.x) * STEP; end.y += (targetEy - end.y) * STEP; }
       }
     }
 
@@ -425,14 +425,14 @@ function solveIteration(particles, constraints, dimensions, sketches) {
 
       let dx1 = b1.x - a1.x, dy1 = b1.y - a1.y;
       const len1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
-      if (len1 < 1e-6) return;
+      if (len1 < 1e-6 || !Number.isFinite(len1)) return;
       dx1 /= len1; dy1 /= len1;
       const theta1 = Math.atan2(dy1, dx1);
 
       let dx2 = b2.x - a2.x, dy2 = b2.y - a2.y;
       const len2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
-      if (len2 < 1e-6) return;
-      const theta2 = Math.atan2(dy2, dx2);
+      if (len2 < 1e-6 || !Number.isFinite(len2)) return;
+      const theta2 = Math.atan2(dy2 / len2, dx2 / len2);
 
       let targetRad = 0;
       if (type === 'perpendicular') targetRad = Math.PI / 2;
@@ -469,6 +469,8 @@ function solveIteration(particles, constraints, dimensions, sketches) {
       const idealDx1 = tXX1 * len1, idealDy1 = tYY1 * len1;
       const idealDx2 = tXX2 * len2, idealDy2 = tYY2 * len2;
 
+      if (!Number.isFinite(idealDx1) || !Number.isFinite(idealDy1) || !Number.isFinite(idealDx2) || !Number.isFinite(idealDy2)) return;
+
       if (!a1.fixed) { a1.x += (b1.x - idealDx1 - a1.x) * STEP * 0.5; a1.y += (b1.y - idealDy1 - a1.y) * STEP * 0.5; }
       if (!b1.fixed) { b1.x += (a1.x + idealDx1 - b1.x) * STEP * 0.5; b1.y += (a1.y + idealDy1 - b1.y) * STEP * 0.5; }
       
@@ -496,8 +498,10 @@ function solveIteration(particles, constraints, dimensions, sketches) {
           const mx = (a2.x + b2.x) / 2, my = (a2.y + b2.y) / 2;
           const newAx = mx + (a2.x - mx) * ratio, newAy = my + (a2.y - my) * ratio;
           const newBx = mx + (b2.x - mx) * ratio, newBy = my + (b2.y - my) * ratio;
-          if (!a2.fixed) { a2.x += (newAx - a2.x) * STEP; a2.y += (newAy - a2.y) * STEP; }
-          if (!b2.fixed) { b2.x += (newBx - b2.x) * STEP; b2.y += (newBy - b2.y) * STEP; }
+          if (Number.isFinite(newAx) && Number.isFinite(newAy) && Number.isFinite(newBx) && Number.isFinite(newBy)) {
+            if (!a2.fixed) { a2.x += (newAx - a2.x) * STEP; a2.y += (newAy - a2.y) * STEP; }
+            if (!b2.fixed) { b2.x += (newBx - b2.x) * STEP; b2.y += (newBy - b2.y) * STEP; }
+          }
         }
       } else if (s1.type === 'circle' && s2.type === 'circle') {
         const target = (s1.radius + s2.radius) / 2;
