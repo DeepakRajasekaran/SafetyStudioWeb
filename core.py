@@ -401,18 +401,6 @@ class SafetyMath:
             
             # Geometric warning is now computed before the lidar loop
                 
-            # Now that warning_final is completely finalized, extract w_clip for each lidar
-            if warning_final and not warning_final.is_empty:
-                for l in lid_out:
-                    if l.get('fov_poly'):
-                        w_clip = warning_final.intersection(l['fov_poly'])
-                        if w_clip.geom_type in ('MultiPolygon', 'GeometryCollection'):
-                            polys = [g for g in getattr(w_clip, 'geoms', []) if g.geom_type == 'Polygon']
-                            if polys: w_clip = max(polys, key=lambda p: p.area)
-                        if getattr(w_clip, 'geom_type', None) == 'Polygon':
-                            w_clip = Polygon(w_clip.exterior.coords)
-                        l['w_clip'] = w_clip
-                        
             if final and not final.is_empty:
                 # Support MultiPolygons (multiple disconnected field parts)
                 if final.geom_type in ('MultiPolygon', 'GeometryCollection'):
