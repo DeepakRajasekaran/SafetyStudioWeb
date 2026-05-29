@@ -159,7 +159,7 @@ class SafetyMath:
         return Polygon(pts, poly.interiors)
 
     @staticmethod
-    def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None, entity_meta=None):
+    def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None, override_warning_poly=None, entity_meta=None):
         try:
             # 1. Geometry Prep
             def sanitize_geom(geom):
@@ -175,6 +175,7 @@ class SafetyMath:
             footprint = sanitize_geom(footprint)
             load_poly = sanitize_geom(load_poly)
             override_poly = sanitize_geom(override_poly)
+            override_warning_poly = sanitize_geom(override_warning_poly)
 
             sw_union = None
             raw_footprint_poly = footprint
@@ -261,7 +262,45 @@ class SafetyMath:
                         sw_union = sw_union.convex_hull
                 final = sw_union.buffer(P.get('smooth',0.05), join_style=1).simplify(0.01)
             
+
+            warning_base = None
+            if override_warning_poly is not None:
+                warning_base = override_warning_poly
+            else:
+                warning_strategy = P.get('warning_strategy', 'none')
+                if warning_strategy == 'geometric' and final and not final.is_empty:
+                    warning_margin = float(P.get('warning_margin', 0.5))
+                    warning_base = final.buffer(warning_margin, join_style=2)
+                elif warning_strategy == 'kinematic':
+                    # Extend reaction time by warning_time — produces D_warn = v*(tr+warning_time) + v²/2a + ds
+                    # This is physically correct: warning field = field with longer response time
+                    tr_warn = float(P['tr']) + float(P.get('warning_time', 0.5))
+                    D_warn = v_ref * tr_warn + (v_ref**2) / (2 * P['ac']) + P['ds'] if P['ac'] > 0 else v_ref * tr_warn + P['ds']
+                    T_warn = D_warn / v_ref if v_ref > 0.01 else tr_warn
+                    warn_ts = np.arange(0, T_warn + 0.02, 0.02)
+                    warn_sweeps = []
+                    warn_traj = np.zeros((len(warn_ts), 3)); warn_traj[0] = [0, 0, np.pi/2]
+                    for i in range(len(warn_ts)):
+                        if i > 0:
+                            px, py, pth = warn_traj[i-1]
+                            warn_traj[i] = [px + v*np.cos(pth)*0.02, py + v*np.sin(pth)*0.02, pth + ang_vel*0.02]
+                        cx, cy, cth = warn_traj[i]; rot_deg = np.degrees(cth - np.pi/2)
+                        poly_instance = translate(rotate(sweep_base, rot_deg, origin=(0,0)), cx, cy)
+                        warn_sweeps.append(poly_instance)
+                    warning_base = unary_union(warn_sweeps)
+                    if abs(v) < 1e-3 and abs(ang_vel) > 1e-3 and P.get('patch_notch', False):
+                        warning_base = SafetyMath.patch_notch(warning_base)
+                    if field_method == 'hull':
+                        warning_base = warning_base.convex_hull
+                    elif field_method == 'hybrid' and D_warn < float(P.get('hull_threshold', 0.5)):
+                        warning_base = warning_base.convex_hull
+                    warning_base = warning_base.buffer(P.get('smooth', 0.05), join_style=1).simplify(0.01)
+                # Note: geometric warning is computed AFTER the sensor loop (below)
+
+            composite_w_clips = []
             lid_out = []; all_fovs = []; composite_clips = []
+            warning_final = warning_base
+
             for s in sensors:
                 og=(s['x'], s['y']); max_r = s['r']
                 mid=np.radians(90+s['mount']); hw=np.radians(s['fov']/2)
@@ -271,6 +310,7 @@ class SafetyMath:
                 all_fovs.append(fov)
                 
                 clip = final.intersection(fov)
+                w_clip = warning_base.intersection(fov) if warning_base else None
                 lidar_shadows = []
                 for other_s in sensors:
                     if other_s is s: continue
@@ -280,7 +320,10 @@ class SafetyMath:
                         sh = SafetyMath.get_shadow_wedge(og, obs_circle, max_r*1.1)
                         if sh: lidar_shadows.append(sh)
                 
-                if lidar_shadows: clip = clip.difference(unary_union(lidar_shadows))
+                if lidar_shadows: 
+                    ls_union = unary_union(lidar_shadows)
+                    clip = clip.difference(ls_union)
+                    if w_clip: w_clip = w_clip.difference(ls_union)
                 # Only clip out load if it is a single polygon that casts shadow, or subtract piece by piece
                 # To simplify, we clip FOV by all load polygons (shadow casting ones)
                 # Wait, FOV clipping is separate from shadow wedge.
@@ -303,6 +346,10 @@ class SafetyMath:
                 shadow = unary_union(valid_shadows) if valid_shadows else None
                 
                 composite_clips.append(clip)
+                # Apply shadow to w_clip BEFORE adding to composite (fixes shadow bug)
+                if warning_base and w_clip:
+                    if shadow: w_clip = w_clip.difference(shadow)
+                    composite_w_clips.append(w_clip)
                 
                 clip_indiv = clip
                 if shadow: clip_indiv = clip.difference(shadow)
@@ -313,6 +360,14 @@ class SafetyMath:
                 if getattr(clip_indiv, 'geom_type', None) == 'Polygon':
                     clip_indiv = Polygon(clip_indiv.exterior.coords)
 
+                w_clip_indiv = w_clip
+                if w_clip_indiv:
+                    if w_clip_indiv.geom_type in ('MultiPolygon', 'GeometryCollection'):
+                        polys = [g for g in getattr(w_clip_indiv, 'geoms', []) if g.geom_type == 'Polygon']
+                        if polys: w_clip_indiv = max(polys, key=lambda p: p.area)
+                    if getattr(w_clip_indiv, 'geom_type', None) == 'Polygon':
+                        w_clip_indiv = Polygon(w_clip_indiv.exterior.coords)
+
                 # To Local
                 s_rot=np.radians(90+s['mount']); loc=[]
                 if not clip_indiv.is_empty and clip_indiv.geom_type == 'Polygon':
@@ -322,6 +377,7 @@ class SafetyMath:
                 lid_out.append({
                     'name':s['name'], 
                     'clip':clip_indiv, 
+                    'w_clip': w_clip_indiv,
                     'origin':og, 
                     'local':loc, 
                     'fov_poly':fov, 
@@ -338,9 +394,25 @@ class SafetyMath:
             
             if composite_clips:
                 final = unary_union(composite_clips)
+                if composite_w_clips: warning_final = unary_union(composite_w_clips)
             elif load_poly:
                 final = final.difference(load_poly)
+                if warning_base: warning_final = warning_base.difference(load_poly)
+            
+            # Geometric warning is now computed before the lidar loop
                 
+            # Now that warning_final is completely finalized, extract w_clip for each lidar
+            if warning_final and not warning_final.is_empty:
+                for l in lid_out:
+                    if l.get('fov_poly'):
+                        w_clip = warning_final.intersection(l['fov_poly'])
+                        if w_clip.geom_type in ('MultiPolygon', 'GeometryCollection'):
+                            polys = [g for g in getattr(w_clip, 'geoms', []) if g.geom_type == 'Polygon']
+                            if polys: w_clip = max(polys, key=lambda p: p.area)
+                        if getattr(w_clip, 'geom_type', None) == 'Polygon':
+                            w_clip = Polygon(w_clip.exterior.coords)
+                        l['w_clip'] = w_clip
+                        
             if final and not final.is_empty:
                 # Support MultiPolygons (multiple disconnected field parts)
                 if final.geom_type in ('MultiPolygon', 'GeometryCollection'):
@@ -360,8 +432,8 @@ class SafetyMath:
                 pt_global = translate(rotate(Point(ref_pt), rot_deg, origin=(0,0)), cx, cy)
                 front_traj.append((pt_global.x, pt_global.y))
             
-            return final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union
+            return final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union, warning_final
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return None, [], [], [], 0.0, [], None, None
+            return None, [], [], [], 0.0, [], None, None, None

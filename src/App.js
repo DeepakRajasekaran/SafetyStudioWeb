@@ -30,9 +30,9 @@ function App() {
     geometry: { FootPrint: null, Load1: null, Load2: null },
     sensors: [],
     physics: {
-      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false },
-      Load1:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false },
-      Load2:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false }
+      NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false, warning_strategy: 'kinematic', warning_time: 0.5, warning_margin: 0.5 },
+      Load1:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false, warning_strategy: 'kinematic', warning_time: 0.5, warning_margin: 0.5 },
+      Load2:  { enabled: false, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false, warning_strategy: 'kinematic', warning_time: 0.5, warning_margin: 0.5 }
     },
     evaluationCases: [
       { id: 1, load: 'NoLoad', v: 1.0, w: 0.0, type: 'std' },
@@ -165,6 +165,10 @@ function App() {
              if (p[l] && p[l].patch_notch === undefined) p[l].patch_notch = true;
              // Force it to true once to fix potential stale false values from previous turn
              if (p[l]) p[l].patch_notch = true; 
+             // Force warning strategy to kinematic if it is not explicitly geometric to clear out old integer 0 values
+             if (p[l] && p[l].warning_strategy !== 'geometric') {
+                 p[l].warning_strategy = 'kinematic';
+             }
            });
            setPhysics(p);
          }

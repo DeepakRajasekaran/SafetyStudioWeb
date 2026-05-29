@@ -78,11 +78,19 @@ def calculate_case():
             except Exception as e:
                 print(f"ERROR: Failed to load custom_field_wkt: {e}")
 
-        print(f"DEBUG: Processing {load_key} case with P: {P} | Custom: {bool(override_poly)}")
+        custom_warning_wkt = data.get('custom_warning_wkt')
+        override_warning_poly = None
+        if custom_warning_wkt:
+            try:
+                override_warning_poly = wkt.loads(custom_warning_wkt)
+            except Exception as e:
+                print(f"ERROR: Failed to load custom_warning_wkt: {e}")
+
+        print(f"DEBUG: Processing {load_key} case with P: {P} | Custom: {bool(override_poly)} | Warn Custom: {bool(override_warning_poly)}")
         
         entity_meta = data.get('entity_meta', {})
-        final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union = SafetyMath.calc_case(
-            footprint, load_poly, sensors, v, w_input, P, override_poly=override_poly, entity_meta=entity_meta
+        final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union, warning_final = SafetyMath.calc_case(
+            footprint, load_poly, sensors, v, w_input, P, override_poly=override_poly, override_warning_poly=override_warning_poly, entity_meta=entity_meta
         )
 
         if final is None:
@@ -92,6 +100,7 @@ def calculate_case():
         if lid_out:
             for l in lid_out:
                 clip = l.get('clip')
+                w_clip = l.get('w_clip')
                 lidar_data.append({
                     'name': l.get('name', ''),
                     'origin': list(l.get('origin', [0, 0])),
@@ -99,7 +108,8 @@ def calculate_case():
                     'flipped': l.get('flipped', False),
                     'dia': l.get('dia', 0.15),
                     'r': l.get('r', 10.0),
-                    'clip_wkt': clip.wkt if clip and not clip.is_empty else None
+                    'clip_wkt': clip.wkt if clip and not clip.is_empty else None,
+                    'w_clip_wkt': w_clip.wkt if w_clip and not w_clip.is_empty else None
                 })
         
         traj_pts = [[p[0], p[1]] for p in traj] if (traj is not None and len(traj) > 0) else []
@@ -111,6 +121,7 @@ def calculate_case():
         return jsonify({
             "success": True,
             "final_field_wkt": final.wkt if final else None,
+            "warning_field_wkt": warning_final.wkt if warning_final and not warning_final.is_empty else None,
             "ideal_field_wkt": ideal_field_wkt,
             "lidars": lidar_data,
             "traj": traj_pts,

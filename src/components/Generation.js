@@ -385,6 +385,62 @@ const Generation = ({ globals }) => {
                     })}
                   </tr>
                 ))}
+                {/* Warning Field Config */}
+                <tr>
+                  <td colSpan="4" style={{ paddingTop: 12, paddingBottom: 4 }}>
+                    <div style={{ fontSize: '0.65rem', color: '#FFC640', fontWeight: 700, letterSpacing: '0.08em' }}>⚠ WARNING FIELD</div>
+                  </td>
+                </tr>
+                <tr>
+                  <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>Warning Mode</td>
+                  {['NoLoad', 'Load1', 'Load2'].map(load => (
+                    <td key={load} style={{ padding: '0 4px' }}>
+                      <select 
+                        className="modern-select" 
+                        style={{ height: 32, fontSize: '0.65rem', opacity: (load !== 'NoLoad' && !physics[load].enabled) ? 0.2 : 1 }}
+                        disabled={load !== 'NoLoad' && !physics[load].enabled}
+                        value={physics[load].warning_strategy || 'none'}
+                        onChange={e => handlePhysicsChange(load, 'warning_strategy', e.target.value)}
+                      >
+                        <option value="none">Disabled</option>
+                        <option value="kinematic">Kinematic (Time)</option>
+                        <option value="geometric">Geometric (Margin)</option>
+                      </select>
+                    </td>
+                  ))}
+                </tr>
+                <tr>
+                  <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>Warn Time (s)</td>
+                  {['NoLoad', 'Load1', 'Load2'].map(load => {
+                    const disabled = (load !== 'NoLoad' && !physics[load].enabled) || physics[load].warning_strategy !== 'kinematic';
+                    return (
+                      <td key={load} style={{ padding: '0 4px' }}>
+                        <ModernInput
+                          value={physics[load].warning_time ?? 0.5}
+                          onChange={e => handlePhysicsChange(load, 'warning_time', e.target.value)}
+                          disabled={disabled}
+                          style={{ opacity: disabled ? 0.2 : 1 }}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
+                <tr>
+                  <td style={{ color: '#aaa', fontSize: '0.78rem', fontWeight: 500, paddingRight: 8 }}>Warn Margin (m)</td>
+                  {['NoLoad', 'Load1', 'Load2'].map(load => {
+                    const disabled = (load !== 'NoLoad' && !physics[load].enabled) || physics[load].warning_strategy !== 'geometric';
+                    return (
+                      <td key={load} style={{ padding: '0 4px' }}>
+                        <ModernInput
+                          value={physics[load].warning_margin ?? 0.5}
+                          onChange={e => handlePhysicsChange(load, 'warning_margin', e.target.value)}
+                          disabled={disabled}
+                          style={{ opacity: disabled ? 0.2 : 1 }}
+                        />
+                      </td>
+                    );
+                  })}
+                </tr>
               </tbody>
             </table>
           </div>

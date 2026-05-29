@@ -14,6 +14,12 @@
   --text-main: #eeeeee;
   --text-muted: #aaaaaa;
   
+  /* Field Configuration */
+  --warning-field-color: #FFC640;
+  --warning-field-opacity: 0.5;
+  --protective-field-color: #FF3A01;
+  --protective-field-opacity: 0.5;
+  
   /* Lidar Marker Configuration */
   --lidar-fill-color: #ffffff;
   --lidar-stroke-color: #ffffff;

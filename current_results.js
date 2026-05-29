@@ -106,8 +106,6 @@ const FIELD_GOLD_FILL = 'rgba(255, 215, 0, 0.4)';
 const FIELD_GOLD_STROKE = '#FFD700';
 const IGNORED_GRAY_FILL = '#4d4d4d';
 const FIELD_STROKE_WIDTH = 1.5;
-const FIELD_PROTECTIVE_COLOR = '#ff6d00';
-const FIELD_WARNING_COLOR = '#FFD700';
 
 const Results = ({ globals }) => {
   const { 
@@ -128,7 +126,6 @@ const Results = ({ globals }) => {
   const [wrtLidar, setWrtLidar] = useState(false);
   const [showFootprint, setShowFootprint] = useState(true);
   const [showLoad1, setShowLoad1] = useState(true);
-  const [editingTarget, setEditingTarget] = useState('protective');
   const [showLoad2, setShowLoad2] = useState(true);
   const [fillSweeps, setFillSweeps] = useState(false);
   const [stagePos, setStagePos] = useState(null);
@@ -390,8 +387,8 @@ const Results = ({ globals }) => {
     const keys = [...new Set([...Object.keys(rawPhysics), 'field_method'])];
     keys.forEach(key => {
       let val = rawPhysics[key];
-      if (key === 'field_method' || key === 'warning_strategy') {
-        sanitizedPhysics[key] = val || (key === 'field_method' ? 'union' : 'none');
+      if (key === 'field_method') {
+        sanitizedPhysics[key] = val || 'union';
       } else if (typeof val === 'boolean') {
         sanitizedPhysics[key] = val;
       } else {
@@ -525,7 +522,6 @@ const Results = ({ globals }) => {
       const oy = (activeLidar.origin && activeLidar.origin[1] !== undefined) ? activeLidar.origin[1] : (activeLidar.y || 0);
       txt += `Origin: (${ox.toFixed(3)}, ${oy.toFixed(3)})\n`;
       txt += `Mount: ${activeLidar.mount}°\n`;
-      txt += `Warning Clip Exists: ${!!activeLidar.w_clip_wkt}\n`;
       
       if (activeLidar.clip_wkt) {
         const pts = parseWktToKonva(activeLidar.clip_wkt);
@@ -553,11 +549,9 @@ const Results = ({ globals }) => {
   }, [currentResult, viewMode, activeLidar, selectedCaseId, tObj.fn]);
 
   const parsedField   = currentResult ? parseWktWithTransform(currentResult.final_field_wkt, tObj.fn) : [];
-  const parsedWarning = currentResult ? parseWktWithTransform(currentResult.warning_field_wkt, tObj.fn) : [];
   const parsedIdeal   = currentResult ? parseWktWithTransform(currentResult.ideal_field_wkt, tObj.fn) : [];
   const parsedIgnored = currentResult ? parseWktWithTransform(currentResult.ignored_wkt, tObj.fn) : [];
   const parsedLidarClip = (viewMode === 'LiDAR View' && activeLidar?.clip_wkt) ? parseWktWithTransform(activeLidar.clip_wkt, tObj.fn) : [];
-  const parsedLidarWarningClip = (viewMode === 'LiDAR View' && activeLidar?.w_clip_wkt) ? parseWktWithTransform(activeLidar.w_clip_wkt, tObj.fn) : [];
   const parsedSweeps = (viewMode === 'Sweep Steps' && currentResult?.sweeps) ? currentResult.sweeps.flatMap(s => parseWktToKonva(s)) : [];
 
   // Client-side convex hull of all sweep vertices (Andrew's monotone chain) — always shown in Sweep Steps
@@ -798,17 +792,6 @@ const Results = ({ globals }) => {
             </>
           )}
         </div>
-
-                {(viewMode === 'Composite' || viewMode === 'LiDAR View') && !isEditingMask && (
-          <div className="segmented-control" style={{ marginBottom: 4 }}>
-             <button onClick={() => setEditingTarget('protective')} className={`segmented-btn ${editingTarget === 'protective' ? 'active' : ''}`} style={{ background: editingTarget === 'protective' ? '#1a4a25' : 'transparent', fontSize: '0.65rem' }}>
-               PROTECTIVE
-             </button>
-             <button onClick={() => setEditingTarget('warning')} className={`segmented-btn ${editingTarget === 'warning' ? 'active' : ''}`} style={{ background: editingTarget === 'warning' ? '#ff9800' : 'transparent', color: editingTarget === 'warning' ? '#000' : '#aaa', fontSize: '0.65rem' }}>
-               WARNING
-             </button>
-          </div>
-        )}
 
         {viewMode === 'Composite' && (isEditMode || isEditingMask) && (
           <div className="segmented-control">
@@ -1066,29 +1049,18 @@ const Results = ({ globals }) => {
                   ));
                 })()}
 
-                {/* 2. Inactive Field (rendered first / bottom) */}
-                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && (
-                  <>
-                    {editingTarget !== 'protective' && parsedField.map((poly, i) => (
-                      <Line key={`field-inact-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
-                    ))}
-                    {editingTarget !== 'warning' && parsedWarning.map((poly, i) => (
-                      <Line key={`warn-inact-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
-                    ))}
-                  </>
-                )}
-                
-                {/* 3. Active Field (rendered above inactive, but below handles) */}
-                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && (
-                  <>
-                    {editingTarget === 'protective' && parsedField.map((poly, i) => (
-                      <Line key={`field-act-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={isEditMode && resultsMode === 'cad' ? 0.4 : 0.6} listening={false} />
-                    ))}
-                    {editingTarget === 'warning' && parsedWarning.map((poly, i) => (
-                      <Line key={`warn-act-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={isEditMode && resultsMode === 'cad' ? 0.4 : 0.6} listening={false} />
-                    ))}
-                  </>
-                )}
+                {/* 3. Safety Field (GOLD - Parity Color #FFD700) */}
+                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedField.map((poly, i) => (
+                  <Line 
+                    key={`field-${i}`} 
+                    points={poly} 
+                    fill={FIELD_GOLD_FILL} 
+                    stroke={FIELD_GOLD_STROKE} 
+                    strokeWidth={isEditMode && resultsMode === 'cad' ? 1/scale : (isEditMode ? 2/scale : 0)} 
+                    closed 
+                    opacity={isEditMode && resultsMode === 'cad' ? 0.4 : 1}
+                  />
+                ))}
 
                 {/* 4. Base Footprint Outline (Z 10 equivalent) */}
                 {showFootprint && geometry.FootPrint && parseWktWithTransform(geometry.FootPrint, tObj.fn).map((poly, i) => (
@@ -1141,25 +1113,13 @@ const Results = ({ globals }) => {
                   />
                 ))}
 
-                {viewMode === 'LiDAR View' && (
-                  <>
-                    {/* Inactive Lidar Field */}
-                    {editingTarget !== 'protective' && parsedLidarClip.map((poly, i) => (
-                      <Line key={`lc-inact-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
-                    ))}
-                    {editingTarget !== 'warning' && parsedLidarWarningClip.map((poly, i) => (
-                      <Line key={`lwc-inact-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
-                    ))}
-                    
-                    {/* Active Lidar Field */}
-                    {editingTarget === 'protective' && parsedLidarClip.map((poly, i) => (
-                      <Line key={`lc-act-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={0.6} listening={false} />
-                    ))}
-                    {editingTarget === 'warning' && parsedLidarWarningClip.map((poly, i) => (
-                      <Line key={`lwc-act-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={0.6} listening={false} />
-                    ))}
-                  </>
-                )}
+                {viewMode === 'LiDAR View' && parsedLidarClip.map((poly, i) => {
+                  const lidarIdx = lidarList.findIndex(l => l.name === activeLidar?.name);
+                  const lidarColor = LIDAR_COLORS[lidarIdx % LIDAR_COLORS.length] || FIELD_GOLD_FILL;
+                  return (
+                    <Line key={`lc-${i}`} points={poly} fill={lidarColor} stroke={lidarColor} strokeWidth={2/scale} closed />
+                  );
+                })}
 
                 {/* 8. Sensors */}
                 {sensors.map((s, i) => {
