@@ -162,9 +162,19 @@ class SafetyMath:
     def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None, entity_meta=None):
         try:
             # 1. Geometry Prep
-            if footprint and not footprint.is_valid: footprint = footprint.buffer(0)
-            if load_poly and not load_poly.is_valid: load_poly = load_poly.buffer(0)
-            if override_poly and not override_poly.is_valid: override_poly = override_poly.buffer(0)
+            def sanitize_geom(geom):
+                if not geom: return geom
+                if getattr(geom, 'geom_type', None) in ('MultiPolygon', 'GeometryCollection'):
+                    from shapely.geometry import GeometryCollection
+                    fixed = []
+                    for g in getattr(geom, 'geoms', []):
+                        fixed.append(g.buffer(0) if not g.is_valid else g)
+                    return GeometryCollection(fixed)
+                return geom.buffer(0) if not geom.is_valid else geom
+
+            footprint = sanitize_geom(footprint)
+            load_poly = sanitize_geom(load_poly)
+            override_poly = sanitize_geom(override_poly)
 
             sw_union = None
             raw_footprint_poly = footprint
