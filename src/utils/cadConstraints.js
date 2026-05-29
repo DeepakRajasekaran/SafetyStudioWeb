@@ -23,10 +23,14 @@ export const applyDimensionUpdate = (sketches, vA, vB, newValue, SCALE_M, dimens
 
   const dx = v2.x - v1.x;
   const dy = v2.y - v1.y;
+  if (!Number.isFinite(dx) || !Number.isFinite(dy)) return sketches;
+  
   const currentDist = Math.sqrt(dx * dx + dy * dy);
-  if (currentDist < 0.001) return sketches; // Avoid divide by zero
+  if (!Number.isFinite(currentDist) || currentDist < 0.001) return sketches; // Avoid divide by zero
 
   const ratio = targetPx / currentDist;
+  if (!Number.isFinite(ratio)) return sketches;
+
   const newX = v1.x + dx * ratio;
   const newY = v1.y + dy * ratio;
 

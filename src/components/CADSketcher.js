@@ -111,7 +111,7 @@ function AngleAnnotation({ cx, cy, r1x, r1y, r2x, r2y, label, scale, onClick }) 
           <Line
             key={k}
             points={[cx + arcR * Math.cos(t0), cy + arcR * Math.sin(t0), cx + arcR * Math.cos(t1), cy + arcR * Math.sin(t1)]}
-            stroke="white" strokeWidth={1.5 / safeScale} listening={false}
+            stroke="#aaa" strokeWidth={1.5 / safeScale} listening={false}
           />
         );
       })}
@@ -119,13 +119,13 @@ function AngleAnnotation({ cx, cy, r1x, r1y, r2x, r2y, label, scale, onClick }) 
       <Line
         points={[arcEndX, arcEndY, arcEndX + tangA2x * arrowSize - (arcEndX - cx) / arcR * arrowSize * 0.4, arcEndY + tangA2y * arrowSize - (arcEndY - cy) / arcR * arrowSize * 0.4,
                 arcEndX + tangA2x * arrowSize + (arcEndX - cx) / arcR * arrowSize * 0.4, arcEndY + tangA2y * arrowSize + (arcEndY - cy) / arcR * arrowSize * 0.4]}
-        fill="white" closed stroke="white" strokeWidth={0.5/safeScale} listening={false}
+        fill="#aaa" closed stroke="#aaa" strokeWidth={0.5/safeScale} listening={false}
       />
       <Text
         x={textX} y={textY}
         text={label + '°'}
         fill="#00e5ff"
-        fontSize={11 / safeScale}
+        fontSize={14 / safeScale}
         align="center"
         offsetX={(label.length * 3.5 + 8) / safeScale}
         offsetY={6 / safeScale}
@@ -180,18 +180,18 @@ function Annotation({ x1, y1, x2, y2, label, scale, tolerance = '', symbol = '',
     <Group>
       <Line points={[p1.x, p1.y, e1.x, e1.y]} stroke="#666" strokeWidth={1 / safeScale} listening={false} />
       <Line points={[p2.x, p2.y, e2.x, e2.y]} stroke="#666" strokeWidth={1 / safeScale} listening={false} />
-      <Line points={[d1.x, d1.y, d2.x, d2.y]} stroke="white" strokeWidth={1.5 / safeScale} listening={false} />
+      <Line points={[d1.x, d1.y, d2.x, d2.y]} stroke="#aaa" strokeWidth={1.5 / safeScale} listening={false} />
       
       {/* Arrows */}
-      <Line points={[d1.x, d1.y, d1.x + (dx/dist)*arrowSize + nx*arrowSize*0.3, d1.y + (dy/dist)*arrowSize + ny*arrowSize*0.3, d1.x + (dx/dist)*arrowSize - nx*arrowSize*0.3, d1.y + (dy/dist)*arrowSize - ny*arrowSize*0.3]} fill="white" closed listening={false} />
-      <Line points={[d2.x, d2.y, d2.x - (dx/dist)*arrowSize + nx*arrowSize*0.3, d2.y - (dy/dist)*arrowSize + ny*arrowSize*0.3, d2.x - (dx/dist)*arrowSize - nx*arrowSize*0.3, d2.y - (dy/dist)*arrowSize - ny*arrowSize*0.3]} fill="white" closed listening={false} />
+      <Line points={[d1.x, d1.y, d1.x + (dx/dist)*arrowSize + nx*arrowSize*0.3, d1.y + (dy/dist)*arrowSize + ny*arrowSize*0.3, d1.x + (dx/dist)*arrowSize - nx*arrowSize*0.3, d1.y + (dy/dist)*arrowSize - ny*arrowSize*0.3]} fill="#aaa" closed listening={false} />
+      <Line points={[d2.x, d2.y, d2.x - (dx/dist)*arrowSize + nx*arrowSize*0.3, d2.y - (dy/dist)*arrowSize + ny*arrowSize*0.3, d2.x - (dx/dist)*arrowSize - nx*arrowSize*0.3, d2.y - (dy/dist)*arrowSize - ny*arrowSize*0.3]} fill="#aaa" closed listening={false} />
 
       <Text 
         x={midX + nx * 8 / safeScale} 
         y={midY + ny * 8 / safeScale} 
         text={fullText} 
         fill="white" 
-        fontSize={12 / safeScale} 
+        fontSize={15 / safeScale} 
         align="center"
         offsetX={(fullText.length * 3.5) / safeScale}
         rotation={angle > 90 || angle < -90 ? angle + 180 : angle}

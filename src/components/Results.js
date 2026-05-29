@@ -618,8 +618,8 @@ const Results = ({ globals }) => {
     // Ensure it's still closed correctly if we deleted the first or last point
     if (pIdx === 0 || pIdx === (poly.length / 2) - 1) {
       const lastIdx = (newPoly.length / 2) - 1;
-      newPoly[0] = newPoly[lastIdx * 2];
-      newPoly[1] = newPoly[lastIdx * 2 + 1];
+      newPoly[lastIdx * 2] = newPoly[0];
+      newPoly[lastIdx * 2 + 1] = newPoly[1];
     }
 
     raw[polyIdx] = newPoly;
@@ -699,8 +699,8 @@ const Results = ({ globals }) => {
     }
     if (pIdx === 0 || pIdx === (poly.length / 2) - 1) {
       const lastIdx = (newPoly.length / 2) - 1;
-      newPoly[0] = newPoly[lastIdx * 2];
-      newPoly[1] = newPoly[lastIdx * 2 + 1];
+      newPoly[lastIdx * 2] = newPoly[0];
+      newPoly[lastIdx * 2 + 1] = newPoly[1];
     }
     raw[polyIdx] = newPoly;
     syncMaskToWkt(raw);
