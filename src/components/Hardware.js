@@ -13,6 +13,7 @@ import {
   Gear,
   Warning
 } from '@phosphor-icons/react';
+import { parseWktToKonva } from '../utils/wktParser';
 
 const Hardware = ({ globals }) => {
   const { evaluationCases, results, fieldsets, setFieldsets, sensors, geometry, physics, maxFields, setMaxFields } = globals;
@@ -102,7 +103,7 @@ const Hardware = ({ globals }) => {
         const r = results[k];
         if (r) {
           strippedResults[k] = {
-            ignored_wkt: r.ignored_wkt,
+            ignored_wkt: geometry.Mask || r.ignored_wkt,
             lidars: (r.lidars || []).map(l => ({ name: l.name, clip_wkt: l.clip_wkt }))
           };
         }
@@ -152,6 +153,84 @@ const Hardware = ({ globals }) => {
       alert("Export failed: " + (err.response?.data?.error || err.message));
     } finally { setIsExporting(false); }
   };
+
+  const handleExportSoftware = () => {
+    try {
+      const presets = [];
+      const SCALE = 100.0;
+
+      evaluationCases.forEach((k, idx) => {
+        const r = results[k.id];
+        if (!r || (!r.final_field_wkt && !r.warning_field_wkt)) return;
+
+        const parseAndRotate = (wkt) => {
+          if (!wkt) return [];
+          const raw = parseWktToKonva(wkt);
+          if (!raw || raw.length === 0) return [];
+          const points = [];
+          
+          // Use the first polygon for the composite field
+          const poly = raw[0];
+          for (let i = 0; i < poly.length; i += 2) {
+            const x_px = poly[i];
+            const y_px = poly[i+1];
+            
+            // convert to meters
+            const x_m = x_px / SCALE;
+            const y_m = -y_px / SCALE;
+            
+            // Apply rotation: X_soft = Y_internal, Y_soft = -X_internal
+            const x_soft = y_m;
+            const y_soft = -x_m;
+
+            points.push({ x: x_soft, y: y_soft, z: 0 });
+          }
+          return points;
+        };
+
+        const safety_field = parseAndRotate(r.final_field_wkt);
+        const warning_field = parseAndRotate(r.warning_field_wkt);
+
+        presets.push({
+          field_set: {
+            name: `${k.v},${k.w}`,
+            load_type: "LOAD",
+            field_type: "velocity",
+            consider_footprint: true,
+            obstacle_min_size: 0,
+            multisample: 0,
+            field_index: idx + 1,
+            monitoring_index: 15,
+            safety_field: safety_field,
+            warning_field: warning_field
+          }
+        });
+      });
+
+      if (presets.length === 0) {
+        alert("No calculated cases available for software export.");
+        return;
+      }
+
+      const softwareJson = [{
+        _id: { $oid: "6670a56d9b62e5a3f803dfe0" },
+        safety_preset_name: "safety",
+        safety_preset_active: true,
+        safety_presets: presets
+      }];
+
+      const blob = new Blob([JSON.stringify(softwareJson, null, 2)], { type: 'application/json' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `software_export.json`);
+      document.body.appendChild(link);
+      link.click();
+    } catch (err) {
+      alert("Software export failed: " + err.message);
+    }
+  };
+
 
   return (
     <div className="hardware-container">
@@ -260,7 +339,7 @@ const Hardware = ({ globals }) => {
       {/* --- Right Pane: Export Actions --- */}
       <div className="hardware-pane" style={{ flex: '0 0 320px', borderRight: 'none', background: '#0a0a0a' }}>
         <div className="hardware-header" style={{ background: '#0d0d0d' }}>
-          <h3>Hardware Export</h3>
+          <h3>Export</h3>
         </div>
         
         <div style={{ padding: '20px', overflowY: 'auto' }}>
@@ -299,6 +378,23 @@ const Hardware = ({ globals }) => {
               </div>
             ))
           )}
+
+          <div className="hw-export-card" style={{ marginTop: 20 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+              <div>
+                <div style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#2196F3' }}>Software</div>
+                <div style={{ fontSize: '0.7rem', color: '#666', marginTop: 2 }}>JSON Export</div>
+              </div>
+              <Download size={20} weight="bold" color="#333" />
+            </div>
+            <button onClick={handleExportSoftware} disabled={isExporting} className="primary-btn" style={{ justifyContent: 'space-between' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <DownloadSimple size={16} weight="bold" />
+                <span>Software Export</span>
+              </div>
+              <CaretRight size={14} weight="bold" opacity={0.5} />
+            </button>
+          </div>
 
           <div style={{ marginTop: 20, padding: 15, background: 'rgba(255,255,0,0.05)', borderRadius: 8, border: '1px solid rgba(255,255,0,0.1)' }}>
             <div style={{ fontSize: '0.75rem', color: '#998a00', fontWeight: 'bold', marginBottom: 5 }}>Export Notes</div>

@@ -346,9 +346,7 @@ class SafetyMath:
                 shadow = unary_union(valid_shadows) if valid_shadows else None
                 
                 composite_clips.append(clip)
-                # Apply shadow to w_clip BEFORE adding to composite (fixes shadow bug)
                 if warning_base and w_clip:
-                    if shadow: w_clip = w_clip.difference(shadow)
                     composite_w_clips.append(w_clip)
                 
                 clip_indiv = clip
@@ -361,6 +359,9 @@ class SafetyMath:
                     clip_indiv = Polygon(clip_indiv.exterior.coords)
 
                 w_clip_indiv = w_clip
+                if shadow and w_clip_indiv:
+                    w_clip_indiv = w_clip_indiv.difference(shadow)
+
                 if w_clip_indiv:
                     if w_clip_indiv.geom_type in ('MultiPolygon', 'GeometryCollection'):
                         polys = [g for g in getattr(w_clip_indiv, 'geoms', []) if g.geom_type == 'Polygon']

@@ -27,7 +27,7 @@ function App() {
   // --- GLOBAL STATE ---
   
   const DEFAULTS = {
-    geometry: { FootPrint: null, Load1: null, Load2: null },
+    geometry: { FootPrint: null, Load1: null, Load2: null, Mask: null },
     sensors: [],
     physics: {
       NoLoad: { enabled: true, tr: 0.1, ac: 1.0, ds: 0.1, pad: 0.05, smooth: 0.05, lat_scale: 1.0, include_load: true, patch_notch: true, field_method: 'union', hull_threshold: 0.5, use_hull_polygon: false, warning_strategy: 'kinematic', warning_time: 0.5, warning_margin: 0.5 },
@@ -257,7 +257,7 @@ function App() {
     { id: 'Home', icon: HouseLine, label: 'Home' },
     { id: 'Editor', icon: PencilSimpleLine, label: 'CAD Editor' },
     { id: 'Results', icon: Polygon, label: 'Results & Solver' },
-    { id: 'Hardware', icon: Download, label: 'Hardware Config' },
+    { id: 'Hardware', icon: Download, label: 'Export' },
     { id: 'Help', icon: Question, label: 'Documentation' },
   ];
 

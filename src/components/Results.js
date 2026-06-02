@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useCallback, useRef } from 'react';
 import { parse } from 'wellknown';
 import { Layer, Line, Circle, Group } from 'react-konva';
 import { 
@@ -153,9 +153,49 @@ const Results = ({ globals }) => {
   const targetDimensions = cadData?.Overrides?.[selectedCaseId]?.dimensions || [];
   const targetFixedPoints = cadData?.Overrides?.[selectedCaseId]?.fixedPoints || [];
   const targetConstraints = cadData?.Overrides?.[selectedCaseId]?.constraints || [];
-
   const cadRef = useRef(null);
   const layerRef = useRef(null);
+
+  // BRUTE FORCE Z-INDEX ENFORCEMENT
+  // React-Konva reconciliation bugs can still shuffle static groups if their children conditionally render.
+  // This layout effect completely overrides Konva's internal array on every single DOM update.
+  useLayoutEffect(() => {
+    if (!layerRef.current) return;
+    const layer = layerRef.current;
+    
+    // Exact requested order:
+    // static -> warning -> protective -> footprint -> mask -> lidar -> trajectories -> sensors -> handles
+    const ORDER = [
+      'static-layer',
+      'composite-bottom-layer',
+      'composite-top-layer',
+      'footprint-layer',
+      'mask-layer',
+      'lidar-bottom-layer',
+      'lidar-top-layer',
+      'trajectories-layer',
+      'sensors-layer',
+      'handles-layer'
+    ];
+    
+    const children = layer.getChildren();
+    if (!children || children.length === 0) return;
+    
+    // Create a sorted copy of the children array
+    const sortedChildren = [...children].sort((a, b) => {
+      const idxA = ORDER.indexOf(a.name() || '');
+      const idxB = ORDER.indexOf(b.name() || '');
+      return (idxA === -1 ? 99 : idxA) - (idxB === -1 ? 99 : idxB);
+    });
+    
+    // Use Konva's native API to enforce the Z-index. 
+    // This safely updates the internal scene graph and dirty flags.
+    sortedChildren.forEach((child, i) => {
+      child.setZIndex(i);
+    });
+    
+    layer.batchDraw();
+  });
 
   const handleCadUndo = () => {
     if (cadHistory.length === 0) return;
@@ -429,6 +469,8 @@ const Results = ({ globals }) => {
     if (!k || !geometry.FootPrint) return;
     setIsCalculating(true);
     pushToHistory();
+    // Clear old result for this case immediately
+    setResults(prev => ({ ...prev, [k.id]: null }));
     try {
       const res = await axios.post('/api/calculate', buildPayload(k));
       if (res.data.success) {
@@ -445,6 +487,11 @@ const Results = ({ globals }) => {
   const handleCalculateAll = async () => {
     setIsCalculating(true);
     pushToHistory();
+    // Clear old results for all evaluation cases immediately
+    const clearedResults = {};
+    evaluationCases.forEach(c => clearedResults[c.id] = null);
+    setResults(prev => ({ ...prev, ...clearedResults }));
+    
     for (const k of evaluationCases) {
       try {
         const res = await axios.post('/api/calculate', buildPayload(k));
@@ -590,9 +637,10 @@ const Results = ({ globals }) => {
   const frontTrajCanvas = (showTraj && (viewMode === 'Composite' || viewMode === 'Sweep Steps' || (viewMode === 'LiDAR View' && showComposite))) ? currentResult.front_traj?.map(p => worldToCanvas(p[0], p[1])).flat() || null : null;
 
   const handlePointDrag = (polyIdx, pIdx, newX, newY) => {
-    if (!currentResult?.final_field_wkt) return;
+    const targetKey = editingTarget === 'warning' ? 'warning_field_wkt' : 'final_field_wkt';
+    if (!currentResult?.[targetKey]) return;
     pushToHistory();
-    const raw = parseWktToKonva(currentResult.final_field_wkt);
+    const raw = parseWktToKonva(currentResult[targetKey]);
     const poly = [...raw[polyIdx]];
     poly[pIdx * 2] = newX; poly[pIdx * 2 + 1] = newY;
     if (pIdx === 0 || pIdx === (poly.length / 2) - 1) {
@@ -600,13 +648,14 @@ const Results = ({ globals }) => {
       poly[0] = poly[last * 2] = newX; poly[1] = poly[last * 2 + 1] = newY;
     }
     raw[polyIdx] = poly;
-    syncPolyToWkt(raw);
+    syncPolyToWkt(raw, targetKey);
   };
 
   const handlePointDelete = (polyIdx, pIdx) => {
-    if (!currentResult?.final_field_wkt) return;
+    const targetKey = editingTarget === 'warning' ? 'warning_field_wkt' : 'final_field_wkt';
+    if (!currentResult?.[targetKey]) return;
     pushToHistory();
-    const raw = parseWktToKonva(currentResult.final_field_wkt);
+    const raw = parseWktToKonva(currentResult[targetKey]);
     const poly = [...raw[polyIdx]];
     
     // Polygon must have at least 3 unique vertices (4 points total including closing)
@@ -629,20 +678,21 @@ const Results = ({ globals }) => {
     }
 
     raw[polyIdx] = newPoly;
-    syncPolyToWkt(raw);
+    syncPolyToWkt(raw, targetKey);
   };
 
   const handleEdgeClick = (polyIdx, edgeIdx, x, y) => {
-    if (!currentResult?.final_field_wkt) return;
+    const targetKey = editingTarget === 'warning' ? 'warning_field_wkt' : 'final_field_wkt';
+    if (!currentResult?.[targetKey]) return;
     pushToHistory();
-    const raw = parseWktToKonva(currentResult.final_field_wkt);
+    const raw = parseWktToKonva(currentResult[targetKey]);
     const poly = [...raw[polyIdx]];
     poly.splice((edgeIdx + 1) * 2, 0, x, y);
     raw[polyIdx] = poly;
-    syncPolyToWkt(raw);
+    syncPolyToWkt(raw, targetKey);
   };
 
-  const syncPolyToWkt = (rawPolys) => {
+  const syncPolyToWkt = (rawPolys, fieldKey = 'final_field_wkt') => {
     const isMulti = rawPolys.length > 1;
     let wktStr = isMulti ? "MULTIPOLYGON(" : "POLYGON(";
     rawPolys.forEach((poly, idx) => {
@@ -653,7 +703,7 @@ const Results = ({ globals }) => {
       wktStr += isMulti ? `((${pts}))${idx === rawPolys.length - 1 ? "" : ", "}` : `(${pts})`;
     });
     wktStr += ")";
-    setResults(prev => ({ ...prev, [selectedCaseId]: { ...prev[selectedCaseId], final_field_wkt: wktStr } }));
+    setResults(prev => ({ ...prev, [selectedCaseId]: { ...prev[selectedCaseId], [fieldKey]: wktStr } }));
   };
 
   // --- Mask (ignored_wkt) editing helpers ---
@@ -937,17 +987,9 @@ const Results = ({ globals }) => {
         {viewMode === 'Composite' && !isEditingMask && (
           <button onClick={async () => {
             if (isEditMode && resultsMode === 'polygon') {
-                const finalWkt = currentResult?.final_field_wkt;
-                if (finalWkt) {
-                  const updatedCases = [...evaluationCases];
-                  const idx = updatedCases.findIndex(c => c.id === selectedCaseId);
-                  if (idx !== -1) {
-                    updatedCases[idx] = { ...updatedCases[idx], custom_dxf: finalWkt };
-                    pushToHistory();
-                    setEvaluationCases(updatedCases);
-                    await handleCalculate(updatedCases[idx]);
-                  }
-                }
+                // Safely exit edit mode. We do NOT submit final_field_wkt as custom_dxf here,
+                // nor do we trigger handleCalculate, because that causes the backend to
+                // completely overwrite local edits and potentially wipe the ignored_wkt mask.
                 setIsEditMode(false);
             } else {
                 setIsEditMode(!isEditMode);
@@ -1031,152 +1073,186 @@ const Results = ({ globals }) => {
           
           <GridCanvas stagePos={stagePos} onStagePosChange={setStagePos} draggable={!(isEditMode || isEditingMask) || activeTool === 'select'}>
             {({ scale, setOverlay }) => (
-              <Layer ref={layerRef}>
-                {/* 1. Static Sweeps (Z -10 equivalent) */}
-                {viewMode === 'Sweep Steps' && parsedSweeps.map((poly, i) => (
-                  <Line key={`sw-${i}`} points={poly} fill={fillSweeps ? "rgba(255,165,0,0.05)" : "transparent"} stroke="rgba(255,165,0,0.4)" strokeWidth={1/scale} closed />
-                ))}
+              <Layer ref={(node) => { layerRef.current = node; window.__debugLayer = node; }}>
+                {/* GROUP 1: Static background */}
+                <Group key="layer-static" name="static-layer">
+                  {/* 1a. Static Sweeps */}
+                  {viewMode === 'Sweep Steps' && parsedSweeps.map((poly, i) => (
+                    <Line key={`sw-${i}`} points={poly} fill={fillSweeps ? "rgba(255,165,0,0.05)" : "transparent"} stroke="rgba(255,165,0,0.4)" strokeWidth={1/scale} closed />
+                  ))}
+                  {/* 1b. Sweep Convex Hull Outline */}
+                  {viewMode === 'Sweep Steps' && sweepHullPoints && (
+                    <Line points={sweepHullPoints} stroke="#00e5ff" strokeWidth={2/scale} fill="rgba(0,229,255,0.04)" dash={[6/scale, 4/scale]} closed />
+                  )}
+                  {/* 1c. Ghost Field (Reference) */}
+                  {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedIdeal.map((poly, i) => (
+                    <Line key={`ideal-${i}`} points={poly} stroke="#444" strokeWidth={1/scale} dash={[5/scale, 5/scale]} closed />
+                  ))}
+                  {/* 1d. CAD Preview Field */}
+                  {isEditMode && resultsMode === 'cad' && previewFieldWkt && (() => {
+                    const transformFn = viewMode === 'LiDAR View' ? tObj.inv : tObj.fn;
+                    return parseWktWithTransform(previewFieldWkt, transformFn).map((poly, i) => (
+                      <Line
+                        key={`preview-${i}`}
+                        points={poly}
+                        fill="rgba(0, 230, 118, 0.35)"
+                        stroke="#00e676"
+                        strokeWidth={2/scale}
+                        closed
+                        dash={[6/scale, 3/scale]}
+                        listening={false}
+                      />
+                    ));
+                  })()}
+                </Group>
 
-                {/* 1b. Sweep Convex Hull Outline */}
-                {viewMode === 'Sweep Steps' && sweepHullPoints && (
-                  <Line points={sweepHullPoints} stroke="#00e5ff" strokeWidth={2/scale} fill="rgba(0,229,255,0.04)" dash={[6/scale, 4/scale]} closed />
-                )}
+                {/* 2. Composite Field (Bottom - Inactive) */}
+                <Group key="layer-comp-bot" name="composite-bottom-layer">
+                  {editingTarget === 'warning' ? (
+                    (viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedField.map((poly, i) => (
+                      <Line key={`field-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
+                    ))
+                  ) : (
+                    (viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedWarning.map((poly, i) => (
+                      <Line key={`warn-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
+                    ))
+                  )}
+                </Group>
 
-                {/* 2. Ghost Field (Reference) */}
-                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedIdeal.map((poly, i) => (
-                  <Line key={`ideal-${i}`} points={poly} stroke="#444" strokeWidth={1/scale} dash={[5/scale, 5/scale]} closed />
-                ))}
+                {/* 3. Composite Field (Top - Active) */}
+                <Group key="layer-comp-top" name="composite-top-layer">
+                  {editingTarget === 'warning' ? (
+                    (viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedWarning.map((poly, i) => (
+                      <Line key={`warn-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={isEditMode && resultsMode === 'cad' ? 0.4 : 0.6} listening={false} />
+                    ))
+                  ) : (
+                    (viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedField.map((poly, i) => (
+                      <Line key={`field-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={isEditMode && resultsMode === 'cad' ? 0.4 : 0.6} listening={false} />
+                    ))
+                  )}
+                </Group>
 
-                {/* 3a. CAD Preview Field (live boolean result — shown in CAD edit mode, replaces gold field) */}
-                {isEditMode && resultsMode === 'cad' && previewFieldWkt && (() => {
-                  // For the preview, if we are in LiDAR View (local), we need the inverse transform 
-                  // because previewFieldWkt is generated in Robot frame (by combining with base gold field)
-                  const transformFn = viewMode === 'LiDAR View' ? tObj.inv : tObj.fn;
-                  return parseWktWithTransform(previewFieldWkt, transformFn).map((poly, i) => (
+                {/* 4. Footprint + load outlines */}
+                <Group key="layer-footprint" name="footprint-layer">
+                  {showFootprint && geometry.FootPrint && parseWktWithTransform(geometry.FootPrint, tObj.fn).map((poly, i) => (
+                    <Line key={`fp-${i}`} points={poly} stroke="#fff" strokeWidth={1/scale} dash={[5/scale, 5/scale]} opacity={0.6} closed />
+                  ))}
+                  {currentResult?.load_wkt && (
+                    (currentResult.load === 'Load1' && showLoad1) ||
+                    (currentResult.load === 'Load2' && showLoad2)
+                  ) && parseWktWithTransform(currentResult.load_wkt, tObj.fn).map((poly, i) => {
+                    const isL2 = currentResult.load === 'Load2';
+                    return (
+                      <Line
+                        key={`load-${i}`}
+                        points={poly}
+                        stroke={isL2 ? "#2196F3" : "#4CAF50"}
+                        strokeWidth={2/scale}
+                        dash={[5/scale, 5/scale]}
+                        fill={isL2 ? "rgba(33, 150, 243, 0.1)" : "rgba(76, 175, 80, 0.1)"}
+                        closed
+                      />
+                    );
+                  })}
+                </Group>
+
+                {/* 5. Mask (Ignored Area) */}
+                <Group key="layer-mask" name="mask-layer" listening={false}>
+                  {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedIgnored.map((poly, i) => (
                     <Line
-                      key={`preview-${i}`}
+                      key={`ig-${i}`}
                       points={poly}
-                      fill="rgba(0, 230, 118, 0.35)"
-                      stroke="#00e676"
-                      strokeWidth={2/scale}
+                      fill={IGNORED_GRAY_FILL}
+                      stroke={isEditingMask ? '#ff5252' : 'transparent'}
+                      strokeWidth={isEditingMask ? 2/scale : 0}
+                      dash={isEditingMask ? [6/scale, 4/scale] : undefined}
                       closed
-                      dash={[6/scale, 3/scale]}
-                      listening={false}
                     />
-                  ));
-                })()}
+                  ))}
 
-                {/* 2. Inactive Field (rendered first / bottom) */}
-                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && (
-                  <>
-                    {editingTarget !== 'protective' && parsedField.map((poly, i) => (
-                      <Line key={`field-inact-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
-                    ))}
-                    {editingTarget !== 'warning' && parsedWarning.map((poly, i) => (
-                      <Line key={`warn-inact-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
-                    ))}
-                  </>
-                )}
-                
-                {/* 3. Active Field (rendered above inactive, but below handles) */}
-                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && (
-                  <>
-                    {editingTarget === 'protective' && parsedField.map((poly, i) => (
-                      <Line key={`field-act-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={isEditMode && resultsMode === 'cad' ? 0.4 : 0.6} listening={false} />
-                    ))}
-                    {editingTarget === 'warning' && parsedWarning.map((poly, i) => (
-                      <Line key={`warn-act-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={isEditMode && resultsMode === 'cad' ? 0.4 : 0.6} listening={false} />
-                    ))}
-                  </>
-                )}
+                  {/* 5b. CAD Preview Mask */}
+                  {isEditingMask && resultsMode === 'cad' && previewFieldWkt && (() => {
+                    const transformFn = viewMode === 'LiDAR View' ? tObj.inv : tObj.fn;
+                    return parseWktWithTransform(previewFieldWkt, transformFn).map((poly, i) => (
+                      <Line
+                        key={`mask-preview-${i}`}
+                        points={poly}
+                        fill={IGNORED_GRAY_FILL}
+                        stroke="#00e676"
+                        strokeWidth={2/scale}
+                        closed
+                        dash={[6/scale, 3/scale]}
+                        listening={false}
+                      />
+                    ));
+                  })()}
+                </Group>
 
-                {/* 4. Base Footprint Outline (Z 10 equivalent) */}
-                {showFootprint && geometry.FootPrint && parseWktWithTransform(geometry.FootPrint, tObj.fn).map((poly, i) => (
-                  <Line key={`fp-${i}`} points={poly} stroke="#fff" strokeWidth={1/scale} dash={[5/scale, 5/scale]} opacity={0.6} closed />
-                ))}
+                {/* 6. LiDAR Fields (Bottom - Inactive) */}
+                <Group key="layer-lidar-bot" name="lidar-bottom-layer">
+                  {viewMode === 'LiDAR View' && (
+                    editingTarget === 'warning' ? (
+                      parsedLidarClip.map((poly, i) => (
+                        <Line key={`lc-inact-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
+                      ))
+                    ) : (
+                      parsedLidarWarningClip.map((poly, i) => (
+                        <Line key={`lwc-inact-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
+                      ))
+                    )
+                  )}
+                </Group>
 
-                {/* 5. Trajectories (Z 15 equivalent) */}
-                {trajCanvas && (
-                   <Group>
-                     <Line points={trajCanvas} stroke="cyan" strokeWidth={2/scale} dash={[8/scale, 4/scale]} />
-                     <Circle x={trajCanvas[trajCanvas.length-2]} y={trajCanvas[trajCanvas.length-1]} radius={4/scale} fill="cyan" />
-                   </Group>
-                )}
-                {frontTrajCanvas && (
-                   <Group>
-                     <Line points={frontTrajCanvas} stroke="lime" strokeWidth={2/scale} dash={[8/scale, 4/scale]} />
-                     <Circle x={frontTrajCanvas[frontTrajCanvas.length-2]} y={frontTrajCanvas[frontTrajCanvas.length-1]} radius={4/scale} fill="lime" />
-                   </Group>
-                )}
+                {/* 7. LiDAR Fields (Top - Active) */}
+                <Group key="layer-lidar-top" name="lidar-top-layer">
+                  {viewMode === 'LiDAR View' && (
+                    editingTarget === 'warning' ? (
+                      parsedLidarWarningClip.map((poly, i) => (
+                        <Line key={`lwc-act-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={0.6} listening={false} />
+                      ))
+                    ) : (
+                      parsedLidarClip.map((poly, i) => (
+                        <Line key={`lc-act-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={0.6} listening={false} />
+                      ))
+                    )
+                  )}
+                </Group>
 
-                {/* 6. Active Evaluated Load Outline (Z 20) */}
-                {currentResult?.load_wkt && (
-                  (currentResult.load === 'Load1' && showLoad1) || 
-                  (currentResult.load === 'Load2' && showLoad2)
-                ) && parseWktWithTransform(currentResult.load_wkt, tObj.fn).map((poly, i) => {
-                  const isL2 = currentResult.load === 'Load2';
-                  return (
-                    <Line 
-                      key={`load-${i}`} 
-                      points={poly} 
-                      stroke={isL2 ? "#2196F3" : "#4CAF50"} 
-                      strokeWidth={2/scale} 
-                      dash={[5/scale, 5/scale]}
-                      fill={isL2 ? "rgba(33, 150, 243, 0.1)" : "rgba(76, 175, 80, 0.1)"} 
-                      closed 
-                    />
-                  );
-                })}
+                {/* GROUP 5: Trajectories */}
+                <Group key="layer-trajectories" name="trajectories-layer">
+                  {trajCanvas && (
+                    <Group>
+                      <Line points={trajCanvas} stroke="cyan" strokeWidth={2/scale} dash={[8/scale, 4/scale]} />
+                      <Circle x={trajCanvas[trajCanvas.length-2]} y={trajCanvas[trajCanvas.length-1]} radius={4/scale} fill="cyan" />
+                    </Group>
+                  )}
+                  {frontTrajCanvas && (
+                    <Group>
+                      <Line points={frontTrajCanvas} stroke="lime" strokeWidth={2/scale} dash={[8/scale, 4/scale]} />
+                      <Circle x={frontTrajCanvas[frontTrajCanvas.length-2]} y={frontTrajCanvas[frontTrajCanvas.length-1]} radius={4/scale} fill="lime" />
+                    </Group>
+                  )}
+                </Group>
 
-                {/* 6. Ignored Area (Z 30 equivalent - Rendered Higher) */}
-                {(viewMode === 'Composite' || (viewMode === 'LiDAR View' && showComposite)) && parsedIgnored.map((poly, i) => (
-                  <Line
-                    key={`ig-${i}`}
-                    points={poly}
-                    fill={IGNORED_GRAY_FILL}
-                    stroke={isEditingMask ? '#ff5252' : 'transparent'}
-                    strokeWidth={isEditingMask ? 2/scale : 0}
-                    dash={isEditingMask ? [6/scale, 4/scale] : undefined}
-                    closed
-                  />
-                ))}
+                {/* GROUP 8: Sensor markers */}
+                <Group key="layer-sensors" name="sensors-layer">
+                  {sensors.map((s, i) => {
+                    const [tx, ty] = tObj.fn(s.x, s.y);
+                    return (
+                      <LidarMarker
+                        key={`s-${i}`}
+                        x={tx * SCALE_M} y={-ty * SCALE_M}
+                        rotation={-s.mount + (viewMode === 'LiDAR View' && !retainOri ? (activeLidar?.mount || 0) : 0)}
+                        scale={scale} name={s.name} dia={s.dia}
+                        SCALE_M={SCALE_M}
+                      />
+                    );
+                  })}
+                </Group>
 
-                {viewMode === 'LiDAR View' && (
-                  <>
-                    {/* Inactive Lidar Field */}
-                    {editingTarget !== 'protective' && parsedLidarClip.map((poly, i) => (
-                      <Line key={`lc-inact-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
-                    ))}
-                    {editingTarget !== 'warning' && parsedLidarWarningClip.map((poly, i) => (
-                      <Line key={`lwc-inact-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={0.2} listening={false} />
-                    ))}
-                    
-                    {/* Active Lidar Field */}
-                    {editingTarget === 'protective' && parsedLidarClip.map((poly, i) => (
-                      <Line key={`lc-act-${i}`} points={poly} fill={FIELD_PROTECTIVE_COLOR} stroke={FIELD_PROTECTIVE_COLOR} strokeWidth={1/scale} closed opacity={0.6} listening={false} />
-                    ))}
-                    {editingTarget === 'warning' && parsedLidarWarningClip.map((poly, i) => (
-                      <Line key={`lwc-act-${i}`} points={poly} fill={FIELD_WARNING_COLOR} stroke={FIELD_WARNING_COLOR} strokeWidth={1/scale} closed opacity={0.6} listening={false} />
-                    ))}
-                  </>
-                )}
-
-                {/* 8. Sensors */}
-                {sensors.map((s, i) => {
-                  const [tx, ty] = tObj.fn(s.x, s.y);
-                  return (
-                    <LidarMarker 
-                      key={`s-${i}`} 
-                      x={tx * SCALE_M} y={-ty * SCALE_M} 
-                      rotation={-s.mount + (viewMode === 'LiDAR View' && !retainOri ? (activeLidar?.mount || 0) : 0)}
-                      scale={scale} name={s.name} dia={s.dia} 
-                      SCALE_M={SCALE_M} 
-                    />
-                  );
-                })}
-
-                {/* 9a. Safety Field Handles */}
-                {isEditMode && resultsMode === 'polygon' && viewMode === 'Composite' && parsedField.map((poly, polyIdx) => {
+                {/* GROUP 9: Edit handles */}
+                <Group key="layer-handles" name="handles-layer">
+                {isEditMode && resultsMode === 'polygon' && viewMode === 'Composite' && (editingTarget === 'warning' ? parsedWarning : parsedField).map((poly, polyIdx) => {
                    if (polyIdx !== 0) return null; // only edit main polygon for now
                    return (
                      <Group key={`edit-${polyIdx}`}>
@@ -1207,10 +1283,7 @@ const Results = ({ globals }) => {
                      </Group>
                    );
                 })}
-
-
-
-                {/* 9b. Mask (Ignored) Handles */}
+                       {/* Mask Handles — inside handlesGroupRef to prevent Z-order corruption */}
                 {isEditingMask && resultsMode === 'polygon' && viewMode === 'Composite' && parsedIgnored.map((poly, polyIdx) => (
                   <Group key={`mask-edit-${polyIdx}`}>
                     {/* Edges Midpoints (Add Points) */}
@@ -1298,6 +1371,7 @@ const Results = ({ globals }) => {
                     />
                   );
                 })()}
+                 </Group>
               </Layer>
             )}
           </GridCanvas>

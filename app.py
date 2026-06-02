@@ -170,11 +170,15 @@ def export_sick():
         
         # 2. Global Geometry (Ignored regions across all used cases)
         ign_polys = []
-        for fs in fieldsets:
-            for fld in fs['fields']:
-                res = results.get(str(fld['caseId']))
-                if res and res.get('ignored_wkt'):
-                    ign_polys.append(wkt.loads(res['ignored_wkt']))
+        geometry = data.get('geometry', {})
+        if geometry and geometry.get('Mask'):
+            ign_polys.append(wkt.loads(geometry['Mask']))
+        else:
+            for fs in fieldsets:
+                for fld in fs['fields']:
+                    res = results.get(str(fld['caseId']))
+                    if res and res.get('ignored_wkt'):
+                        ign_polys.append(wkt.loads(res['ignored_wkt']))
         
         if ign_polys:
             u_ign = unary_union(ign_polys)
