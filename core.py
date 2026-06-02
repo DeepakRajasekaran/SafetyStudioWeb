@@ -209,29 +209,43 @@ class SafetyMath:
         if n < 10: return poly
 
         # Center of rotation (ICR) in local coordinate system
-        x_icr = -v / w
-        y_icr = 0.0
+        x_icr = 0.0
+        y_icr = v / w
         
         # Calculate distance of each vertex to the ICR
-        dist = np.array([math.hypot(p[0] - x_icr, p[1] - y_icr) for p in pts])
+        dists = np.array([math.hypot(p[0] - x_icr, p[1] - y_icr) for p in pts])
+        max_d = np.max(dists)
         
-        # Trajectory curvature radius
-        r_traj = abs(v) / abs(w)
+        # Identify the outer curve plateau (points near max distance)
+        threshold = max_d - 0.05
+        plateau_indices = np.where(dists > threshold)[0]
+        if len(plateau_indices) < 5:
+            return poly
+            
+        # Find the longest gap in the plateau to identify the start and end corners
+        diffs = np.append((plateau_indices[1:] - plateau_indices[:-1]) % n, (plateau_indices[0] - plateau_indices[-1]) % n)
+        max_gap_idx = np.argmax(diffs)
         
-        # Filter for vertices on the outer curved boundary of the turn
-        outer_indices = [i for i in range(n) if dist[i] > (r_traj + 0.05)]
-        if len(outer_indices) < 5: return poly # Not enough outer vertices to fit an arc
+        end_corner = plateau_indices[max_gap_idx]
+        start_corner = plateau_indices[(max_gap_idx + 1) % len(plateau_indices)]
         
-        outer_dists = dist[outer_indices]
-        # Identify the true outer radius using the 90th percentile of outer distances
+        # Determine the indices that belong to the outer curve
+        if start_corner <= end_corner:
+            curve_indices = set(range(start_corner, end_corner + 1))
+        else:
+            curve_indices = set(range(start_corner, n)).union(set(range(0, end_corner + 1)))
+            
+        # The true outer radius is the 90th percentile of the plateau distances
+        outer_dists = dists[list(curve_indices)]
         r_outer = np.percentile(outer_dists, 90)
         
         new_pts = []
         for i in range(n):
             p = pts[i]
-            d = dist[i]
-            # Check if this point is on the outer boundary and forms an inward dent (anomaly)
-            if i in outer_indices and (r_outer - d) > 0.02:
+            d = dists[i]
+            # Snap all points near the outer radius to the true outer arc.
+            # This perfectly smooths the outer curve while preserving deep footprint features (> 5cm deviation).
+            if i in curve_indices and abs(r_outer - d) < 0.05:
                 # Reconstruct this point by projecting it back to the true outer radius
                 dx = p[0] - x_icr
                 dy = p[1] - y_icr
