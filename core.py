@@ -223,7 +223,7 @@ class SafetyMath:
             return poly
             
         # Find the longest gap in the plateau to identify the start and end corners
-        diffs = (plateau_indices[1:] - plateau_indices[:-1]) % n
+        diffs = np.append((plateau_indices[1:] - plateau_indices[:-1]) % n, (plateau_indices[0] - plateau_indices[-1]) % n)
         max_gap_idx = np.argmax(diffs)
         
         end_corner = plateau_indices[max_gap_idx]
