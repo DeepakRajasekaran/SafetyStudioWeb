@@ -315,7 +315,7 @@ class SafetyMath:
                     threshold = float(P.get('hull_threshold', 0.5))
                     if D < threshold:
                         sw_union = sw_union.convex_hull
-                final = sw_union.buffer(P.get('smooth',0.05), join_style=1).simplify(0.01)
+                final = sw_union.buffer(P.get('smooth',0.05), join_style=1).simplify(0.002)
             
 
             warning_base = None
@@ -325,7 +325,7 @@ class SafetyMath:
                 warning_strategy = P.get('warning_strategy', 'none')
                 if warning_strategy == 'geometric' and final and not final.is_empty:
                     warning_margin = float(P.get('warning_margin', 0.5))
-                    warning_base = final.buffer(warning_margin, join_style=2)
+                    warning_base = final.buffer(warning_margin, join_style=1).simplify(0.002)
                 elif warning_strategy == 'kinematic':
                     # Extend reaction time by warning_time — produces D_warn = v*(tr+warning_time) + v²/2a + ds
                     # This is physically correct: warning field = field with longer response time
@@ -352,7 +352,7 @@ class SafetyMath:
                         warning_base = warning_base.convex_hull
                     elif field_method == 'hybrid' and D_warn < float(P.get('hull_threshold', 0.5)):
                         warning_base = warning_base.convex_hull
-                    warning_base = warning_base.buffer(P.get('smooth', 0.05), join_style=1).simplify(0.01)
+                    warning_base = warning_base.buffer(P.get('smooth', 0.05), join_style=1).simplify(0.002)
                 # Note: geometric warning is computed AFTER the sensor loop (below)
 
             composite_w_clips = []
