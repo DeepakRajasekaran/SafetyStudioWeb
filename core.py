@@ -243,8 +243,8 @@ class SafetyMath:
         for i in range(n):
             p = pts[i]
             d = dists[i]
-            # Check if this point is on the outer curve and forms an inward dent (anomaly)
-            if i in curve_indices and (r_outer - d) > 0.01:
+            # Check if this point is on the outer curve and deviates from the true arc
+            if i in curve_indices and abs(r_outer - d) > 0.001:
                 # Reconstruct this point by projecting it back to the true outer radius
                 dx = p[0] - x_icr
                 dy = p[1] - y_icr
