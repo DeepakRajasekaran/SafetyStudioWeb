@@ -243,9 +243,8 @@ class SafetyMath:
         for i in range(n):
             p = pts[i]
             d = dists[i]
-            # Snap all points near the outer radius to the true outer arc.
-            # This perfectly smooths the outer curve while preserving deep footprint features (> 5cm deviation).
-            if i in curve_indices and abs(r_outer - d) < 0.05:
+            # Check if this point is on the outer curve
+            if i in curve_indices:
                 # Reconstruct this point by projecting it back to the true outer radius
                 dx = p[0] - x_icr
                 dy = p[1] - y_icr
