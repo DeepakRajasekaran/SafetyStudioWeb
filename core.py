@@ -239,6 +239,29 @@ class SafetyMath:
         outer_dists = dists[list(curve_indices)]
         r_outer = np.percentile(outer_dists, 90)
         
+        # --- Identify the inner curve plateau ---
+        min_d = np.min(dists)
+        inner_threshold = min_d + 0.05
+        inner_plateau_indices = np.where(dists < inner_threshold)[0]
+        
+        inner_curve_indices = set()
+        r_inner = min_d
+        if len(inner_plateau_indices) >= 5:
+            diffs_in = np.append((inner_plateau_indices[1:] - inner_plateau_indices[:-1]) % n, (inner_plateau_indices[0] - inner_plateau_indices[-1]) % n)
+            max_gap_idx_in = np.argmax(diffs_in)
+            
+            end_in = inner_plateau_indices[max_gap_idx_in]
+            start_in = inner_plateau_indices[(max_gap_idx_in + 1) % len(inner_plateau_indices)]
+            
+            if start_in <= end_in:
+                inner_curve_indices = set(range(start_in, end_in + 1))
+            else:
+                inner_curve_indices = set(range(start_in, n)).union(set(range(0, end_in + 1)))
+                
+            inner_dists = dists[list(inner_curve_indices)]
+            # True inner radius is the 10th percentile of the innermost plateau
+            r_inner = np.percentile(inner_dists, 10)
+        
         new_pts = []
         for i in range(n):
             p = pts[i]
@@ -251,6 +274,16 @@ class SafetyMath:
                 h = math.hypot(dx, dy)
                 if h > 1e-4:
                     new_pt = (x_icr + (dx / h) * r_outer, y_icr + (dy / h) * r_outer)
+                    new_pts.append(new_pt)
+                else:
+                    new_pts.append(p)
+            # Check if this point is on the inner curve and deviates from the true inner arc
+            elif i in inner_curve_indices and abs(r_inner - d) > 0.001:
+                dx = p[0] - x_icr
+                dy = p[1] - y_icr
+                h = math.hypot(dx, dy)
+                if h > 1e-4:
+                    new_pt = (x_icr + (dx / h) * r_inner, y_icr + (dy / h) * r_inner)
                     new_pts.append(new_pt)
                 else:
                     new_pts.append(p)
