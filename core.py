@@ -243,10 +243,9 @@ class SafetyMath:
         for i in range(n):
             p = pts[i]
             d = dists[i]
-            deviation = r_outer - d
-            # Patch only minor inward anomalies (sweep notches) on the outer curve.
-            # Deep anomalies (> 0.02m) are actual footprint features (e.g. straight edges) and are preserved.
-            if i in curve_indices and 0.001 < deviation < 0.02:
+            # Snap all points near the outer radius to the true outer arc.
+            # This perfectly smooths the outer curve while preserving deep footprint features (> 5cm deviation).
+            if i in curve_indices and abs(r_outer - d) < 0.05:
                 # Reconstruct this point by projecting it back to the true outer radius
                 dx = p[0] - x_icr
                 dy = p[1] - y_icr
