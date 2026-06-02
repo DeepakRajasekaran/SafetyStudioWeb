@@ -198,7 +198,7 @@ const Hardware = ({ globals }) => {
         presets.push({
           field_set: {
             name: `${k.v},${k.w}`,
-            load_type: k.load?.toLowerCase().includes("no_load") ? "NO_LOAD" : "LOAD",
+            load_type: k.load?.toLowerCase().replace(/_/g, '').includes("noload") ? "NO_LOAD" : "LOAD",
             field_type: "velocity",
             consider_footprint: true,
             obstacle_min_size: 0,
