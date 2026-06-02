@@ -4,8 +4,6 @@ on:
   push:
     branches: [ "main" ]
     tags: [ "v*" ]
-  pull_request:
-    branches: [ "main" ]
 
 jobs:
   build-and-push:
@@ -22,7 +20,7 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
-        if: github.event_name != 'pull_request'
+        if: github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v')
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -44,7 +42,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.backend
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
           tags: |
             deepakrajasekaran/safetystudioweb:backend
             ${{ github.ref_type == 'tag' && format('deepakrajasekaran/safetystudioweb:backend-{0}', github.ref_name) || '' }}
@@ -56,7 +54,7 @@ jobs:
         with:
           context: .
           file: ./Dockerfile.frontend
-          push: ${{ github.event_name != 'pull_request' }}
+          push: ${{ github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') }}
           tags: |
             deepakrajasekaran/safetystudioweb:frontend
             ${{ github.ref_type == 'tag' && format('deepakrajasekaran/safetystudioweb:frontend-{0}', github.ref_name) || '' }}
