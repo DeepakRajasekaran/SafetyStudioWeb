@@ -159,6 +159,73 @@ class SafetyMath:
         return Polygon(pts, poly.interiors)
 
     @staticmethod
+    def prune_collinear_points(poly, tolerance=0.0005):
+        if not poly or poly.is_empty: return poly
+        if poly.geom_type == 'Polygon':
+            pts = list(poly.exterior.coords)
+            if len(pts) < 4: return poly
+            if pts[0] == pts[-1]: pts.pop()
+            
+            n = len(pts)
+            keep = []
+            for i in range(n):
+                p_prev = pts[(i-1)%n]
+                p_curr = pts[i]
+                p_next = pts[(i+1)%n]
+                
+                dx = p_next[0] - p_prev[0]
+                dy = p_next[1] - p_prev[1]
+                line_len = math.hypot(dx, dy)
+                if line_len < 1e-7:
+                    continue
+                
+                # Perpendicular distance from p_curr to the line p_prev -> p_next
+                dist = abs(dx * (p_prev[1] - p_curr[1]) - dy * (p_prev[0] - p_curr[0])) / line_len
+                if dist > tolerance:
+                    keep.append(p_curr)
+                    
+            if len(keep) < 3: return poly
+            
+            # Process holes (interiors)
+            new_interiors = []
+            for interior in poly.interiors:
+                ipts = list(interior.coords)
+                if len(ipts) < 4:
+                    new_interiors.append(interior)
+                    continue
+                if ipts[0] == ipts[-1]: ipts.pop()
+                in_n = len(ipts)
+                ikeep = []
+                for i in range(in_n):
+                    p_prev = ipts[(i-1)%in_n]
+                    p_curr = ipts[i]
+                    p_next = ipts[(i+1)%in_n]
+                    idx = p_next[0] - p_prev[0]
+                    idy = p_next[1] - p_prev[1]
+                    ilen = math.hypot(idx, idy)
+                    if ilen < 1e-7: continue
+                    idist = abs(idx * (p_prev[1] - p_curr[1]) - idy * (p_prev[0] - p_curr[0])) / ilen
+                    if idist > tolerance:
+                        ikeep.append(p_curr)
+                if len(ikeep) >= 3:
+                    new_interiors.append(Polygon(ikeep).exterior)
+                else:
+                    new_interiors.append(interior)
+                    
+            return Polygon(keep, new_interiors)
+        elif poly.geom_type == 'MultiPolygon':
+            return unary_union([SafetyMath.prune_collinear_points(p, tolerance) for p in poly.geoms])
+        elif poly.geom_type == 'GeometryCollection':
+            geoms = []
+            for g in poly.geoms:
+                if g.geom_type in ['Polygon', 'MultiPolygon']:
+                    geoms.append(SafetyMath.prune_collinear_points(g, tolerance))
+                else:
+                    geoms.append(g)
+            return unary_union(geoms)
+        return poly
+
+    @staticmethod
     def patch_turning_notch(poly, v, w):
         if not poly.is_valid or poly.is_empty or poly.geom_type != 'Polygon': return poly
         if abs(w) < 1e-5: return poly
@@ -315,7 +382,8 @@ class SafetyMath:
                     threshold = float(P.get('hull_threshold', 0.5))
                     if D < threshold:
                         sw_union = sw_union.convex_hull
-                final = sw_union.buffer(P.get('smooth',0.05), join_style=1).simplify(0.002)
+                final = sw_union.buffer(P.get('smooth',0.05), join_style=1, quad_segs=4).simplify(0.002)
+                final = SafetyMath.prune_collinear_points(final)
             
 
             warning_base = None
@@ -325,7 +393,8 @@ class SafetyMath:
                 warning_strategy = P.get('warning_strategy', 'none')
                 if warning_strategy == 'geometric' and final and not final.is_empty:
                     warning_margin = float(P.get('warning_margin', 0.5))
-                    warning_base = final.buffer(warning_margin, join_style=1).simplify(0.002)
+                    warning_base = final.buffer(warning_margin, join_style=1, quad_segs=4).simplify(0.002)
+                    warning_base = SafetyMath.prune_collinear_points(warning_base)
                 elif warning_strategy == 'kinematic':
                     # Extend reaction time by warning_time — produces D_warn = v*(tr+warning_time) + v²/2a + ds
                     # This is physically correct: warning field = field with longer response time
@@ -352,7 +421,8 @@ class SafetyMath:
                         warning_base = warning_base.convex_hull
                     elif field_method == 'hybrid' and D_warn < float(P.get('hull_threshold', 0.5)):
                         warning_base = warning_base.convex_hull
-                    warning_base = warning_base.buffer(P.get('smooth', 0.05), join_style=1).simplify(0.002)
+                    warning_base = warning_base.buffer(P.get('smooth', 0.05), join_style=1, quad_segs=4).simplify(0.002)
+                    warning_base = SafetyMath.prune_collinear_points(warning_base)
                 # Note: geometric warning is computed AFTER the sensor loop (below)
 
             composite_w_clips = []
@@ -415,6 +485,7 @@ class SafetyMath:
                     if polys: clip_indiv = max(polys, key=lambda p: p.area)
                 if getattr(clip_indiv, 'geom_type', None) == 'Polygon':
                     clip_indiv = Polygon(clip_indiv.exterior.coords)
+                    clip_indiv = SafetyMath.prune_collinear_points(clip_indiv)
 
                 w_clip_indiv = w_clip
                 if shadow and w_clip_indiv:
@@ -426,6 +497,7 @@ class SafetyMath:
                         if polys: w_clip_indiv = max(polys, key=lambda p: p.area)
                     if getattr(w_clip_indiv, 'geom_type', None) == 'Polygon':
                         w_clip_indiv = Polygon(w_clip_indiv.exterior.coords)
+                        w_clip_indiv = SafetyMath.prune_collinear_points(w_clip_indiv)
 
                 # To Local
                 s_rot=np.radians(90+s['mount']); loc=[]
