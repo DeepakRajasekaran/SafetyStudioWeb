@@ -209,8 +209,8 @@ class SafetyMath:
         if n < 10: return poly
 
         # Center of rotation (ICR) in local coordinate system
-        x_icr = 0.0
-        y_icr = v / w
+        x_icr = -v / w
+        y_icr = 0.0
         
         # Calculate distance of each vertex to the ICR
         dists = np.array([math.hypot(p[0] - x_icr, p[1] - y_icr) for p in pts])
