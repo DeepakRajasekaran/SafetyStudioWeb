@@ -226,6 +226,35 @@ class SafetyMath:
         return poly
 
     @staticmethod
+    def scale_polygon_outward(poly, margin):
+        if not poly or poly.is_empty:
+            return poly
+        if poly.geom_type == 'Polygon':
+            c = poly.centroid
+            pts = list(poly.exterior.coords)
+            if not pts:
+                return poly
+            distances = [math.hypot(p[0] - c.x, p[1] - c.y) for p in pts]
+            D_avg = sum(distances) / len(distances) if distances else 1.0
+            if D_avg < 1e-5:
+                D_avg = 1.0
+            S = (D_avg + margin) / D_avg
+            return scale(poly, xfact=S, yfact=S, origin=c)
+        elif poly.geom_type == 'MultiPolygon':
+            c = poly.centroid
+            scaled_geoms = []
+            for g in poly.geoms:
+                pts = list(g.exterior.coords)
+                distances = [math.hypot(p[0] - c.x, p[1] - c.y) for p in pts]
+                D_avg = sum(distances) / len(distances) if distances else 1.0
+                if D_avg < 1e-5:
+                    D_avg = 1.0
+                S = (D_avg + margin) / D_avg
+                scaled_geoms.append(scale(g, xfact=S, yfact=S, origin=c))
+            return MultiPolygon(scaled_geoms)
+        return poly
+
+    @staticmethod
     def patch_turning_notch(poly, v, w):
         if not poly.is_valid or poly.is_empty or poly.geom_type != 'Polygon': return poly
         if abs(w) < 1e-5: return poly
@@ -393,7 +422,7 @@ class SafetyMath:
                 warning_strategy = P.get('warning_strategy', 'none')
                 if warning_strategy == 'geometric' and final and not final.is_empty:
                     warning_margin = float(P.get('warning_margin', 0.5))
-                    warning_base = final.buffer(warning_margin, join_style=1, quad_segs=4).simplify(0.002)
+                    warning_base = SafetyMath.scale_polygon_outward(final, warning_margin)
                     warning_base = SafetyMath.prune_collinear_points(warning_base)
                 elif warning_strategy == 'kinematic':
                     # Extend reaction time by warning_time — produces D_warn = v*(tr+warning_time) + v²/2a + ds
