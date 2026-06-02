@@ -192,7 +192,7 @@ const Hardware = ({ globals }) => {
         const warning_field = parseAndRotate(r.warning_field_wkt);
 
         const case_id = Number(k.id);
-        const monitoring_index = Math.floor(case_id / 2);
+        const monitoring_index = Math.floor((case_id - 1) / 2);
         const field_index = (case_id % 2 !== 0) ? 1 : 2;
 
         presets.push({

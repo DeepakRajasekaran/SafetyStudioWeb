@@ -161,69 +161,9 @@ class SafetyMath:
     @staticmethod
     def prune_collinear_points(poly, tolerance=0.0005):
         if not poly or poly.is_empty: return poly
-        if poly.geom_type == 'Polygon':
-            pts = list(poly.exterior.coords)
-            if len(pts) < 4: return poly
-            if pts[0] == pts[-1]: pts.pop()
-            
-            n = len(pts)
-            keep = []
-            for i in range(n):
-                p_prev = pts[(i-1)%n]
-                p_curr = pts[i]
-                p_next = pts[(i+1)%n]
-                
-                dx = p_next[0] - p_prev[0]
-                dy = p_next[1] - p_prev[1]
-                line_len = math.hypot(dx, dy)
-                if line_len < 1e-7:
-                    continue
-                
-                # Perpendicular distance from p_curr to the line p_prev -> p_next
-                dist = abs(dx * (p_prev[1] - p_curr[1]) - dy * (p_prev[0] - p_curr[0])) / line_len
-                if dist > tolerance:
-                    keep.append(p_curr)
-                    
-            if len(keep) < 3: return poly
-            
-            # Process holes (interiors)
-            new_interiors = []
-            for interior in poly.interiors:
-                ipts = list(interior.coords)
-                if len(ipts) < 4:
-                    new_interiors.append(interior)
-                    continue
-                if ipts[0] == ipts[-1]: ipts.pop()
-                in_n = len(ipts)
-                ikeep = []
-                for i in range(in_n):
-                    p_prev = ipts[(i-1)%in_n]
-                    p_curr = ipts[i]
-                    p_next = ipts[(i+1)%in_n]
-                    idx = p_next[0] - p_prev[0]
-                    idy = p_next[1] - p_prev[1]
-                    ilen = math.hypot(idx, idy)
-                    if ilen < 1e-7: continue
-                    idist = abs(idx * (p_prev[1] - p_curr[1]) - idy * (p_prev[0] - p_curr[0])) / ilen
-                    if idist > tolerance:
-                        ikeep.append(p_curr)
-                if len(ikeep) >= 3:
-                    new_interiors.append(Polygon(ikeep).exterior)
-                else:
-                    new_interiors.append(interior)
-                    
-            return Polygon(keep, new_interiors)
-        elif poly.geom_type == 'MultiPolygon':
-            return unary_union([SafetyMath.prune_collinear_points(p, tolerance) for p in poly.geoms])
-        elif poly.geom_type == 'GeometryCollection':
-            geoms = []
-            for g in poly.geoms:
-                if g.geom_type in ['Polygon', 'MultiPolygon']:
-                    geoms.append(SafetyMath.prune_collinear_points(g, tolerance))
-                else:
-                    geoms.append(g)
-            return unary_union(geoms)
-        return poly
+        # Shapely's simplify with Douglas-Peucker correctly removes collinear and nearly-collinear points
+        # without accumulating error that flattens out gentle arcs.
+        return poly.simplify(tolerance, preserve_topology=True)
 
     @staticmethod
     def scale_polygon_outward(poly, margin):
