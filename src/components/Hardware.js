@@ -191,6 +191,10 @@ const Hardware = ({ globals }) => {
         const safety_field = parseAndRotate(r.final_field_wkt);
         const warning_field = parseAndRotate(r.warning_field_wkt);
 
+        const case_id = Number(k.id);
+        const monitoring_index = Math.floor(case_id / 2);
+        const field_index = (case_id % 2 !== 0) ? 1 : 2;
+
         presets.push({
           field_set: {
             name: `${k.v},${k.w}`,
@@ -199,8 +203,8 @@ const Hardware = ({ globals }) => {
             consider_footprint: true,
             obstacle_min_size: 0,
             multisample: 0,
-            field_index: idx + 1,
-            monitoring_index: 15,
+            field_index: field_index,
+            monitoring_index: monitoring_index,
             safety_field: safety_field,
             warning_field: warning_field
           }
