@@ -219,13 +219,13 @@ const Editor = ({ globals, setActiveTab }) => {
         <GridCanvas initialScale={1.0} draggable={activeTool === 'select'}>
           {({ scale: canvasScale, setOverlay }) => (
             <Layer ref={layerRef}>
-              {/* FootPrint */}
-              {parsedFP.map((pts, i) => {
-                const meta = cadData?.FootPrint?.entityMeta?.[i] || {};
+              {/* Load 2 */}
+              {parsedL2.map((pts, i) => {
+                const meta = cadData?.Load2?.entityMeta?.[i] || {};
                 const isVisible = meta.visible !== false;
-                const isHovered = hoveredEntity === `FootPrint-${i}`;
+                const isHovered = hoveredEntity === `Load2-${i}`;
                 if (!isVisible) return null;
-                return <Line key={`fp-${i}`} points={pts} fill={isHovered ? "rgba(153,153,153,0.8)" : "rgba(153,153,153,0.4)"} closed stroke={isHovered ? "#fff" : "#888"} strokeWidth={(isHovered ? 2 : 1) / canvasScale} />
+                return <Line key={`l2-${i}`} points={pts} fill={isHovered ? "rgba(76,175,80,0.8)" : "rgba(76,175,80,0.4)"} closed stroke={isHovered ? "#fff" : "#4CAF50"} strokeWidth={(isHovered ? 2 : 1) / canvasScale} />
               })}
               {/* Load 1 */}
               {parsedL1.map((pts, i) => {
@@ -235,13 +235,13 @@ const Editor = ({ globals, setActiveTab }) => {
                 if (!isVisible) return null;
                 return <Line key={`l1-${i}`} points={pts} fill={isHovered ? "rgba(33,150,243,0.8)" : "rgba(33,150,243,0.4)"} closed stroke={isHovered ? "#fff" : "#2196F3"} strokeWidth={(isHovered ? 2 : 1) / canvasScale} />
               })}
-              {/* Load 2 */}
-              {parsedL2.map((pts, i) => {
-                const meta = cadData?.Load2?.entityMeta?.[i] || {};
+              {/* FootPrint */}
+              {parsedFP.map((pts, i) => {
+                const meta = cadData?.FootPrint?.entityMeta?.[i] || {};
                 const isVisible = meta.visible !== false;
-                const isHovered = hoveredEntity === `Load2-${i}`;
+                const isHovered = hoveredEntity === `FootPrint-${i}`;
                 if (!isVisible) return null;
-                return <Line key={`l2-${i}`} points={pts} fill={isHovered ? "rgba(76,175,80,0.8)" : "rgba(76,175,80,0.4)"} closed stroke={isHovered ? "#fff" : "#4CAF50"} strokeWidth={(isHovered ? 2 : 1) / canvasScale} />
+                return <Line key={`fp-${i}`} points={pts} fill={isHovered ? "rgba(153,153,153,0.8)" : "rgba(153,153,153,0.4)"} closed stroke={isHovered ? "#fff" : "#888"} strokeWidth={(isHovered ? 2 : 1) / canvasScale} />
               })}
               {/* CAD Sketches */}
               {isSketchingMode && (

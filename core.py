@@ -159,6 +159,58 @@ class SafetyMath:
         return Polygon(pts, poly.interiors)
 
     @staticmethod
+    def patch_turning_notch(poly, v, w):
+        if not poly.is_valid or poly.is_empty or poly.geom_type != 'Polygon': return poly
+        if abs(w) < 1e-5: return poly
+        
+        # Enforce Counter-Clockwise coordinate orientation
+        if not poly.exterior.is_ccw:
+            poly = Polygon(list(poly.exterior.coords)[::-1])
+            
+        pts = list(poly.exterior.coords)
+        if pts[0] == pts[-1]: pts.pop()
+        n = len(pts)
+        if n < 10: return poly
+
+        # Center of rotation (ICR) in local coordinate system
+        x_icr = -v / w
+        y_icr = 0.0
+        
+        # Calculate distance of each vertex to the ICR
+        dist = np.array([math.hypot(p[0] - x_icr, p[1] - y_icr) for p in pts])
+        
+        # Trajectory curvature radius
+        r_traj = abs(v) / abs(w)
+        
+        # Filter for vertices on the outer curved boundary of the turn
+        outer_indices = [i for i in range(n) if dist[i] > (r_traj + 0.05)]
+        if len(outer_indices) < 5: return poly # Not enough outer vertices to fit an arc
+        
+        outer_dists = dist[outer_indices]
+        # Identify the true outer radius using the 90th percentile of outer distances
+        r_outer = np.percentile(outer_dists, 90)
+        
+        new_pts = []
+        for i in range(n):
+            p = pts[i]
+            d = dist[i]
+            # Check if this point is on the outer boundary and forms an inward dent (anomaly)
+            if i in outer_indices and (r_outer - d) > 0.02:
+                # Reconstruct this point by projecting it back to the true outer radius
+                dx = p[0] - x_icr
+                dy = p[1] - y_icr
+                h = math.hypot(dx, dy)
+                if h > 1e-4:
+                    new_pt = (x_icr + (dx / h) * r_outer, y_icr + (dy / h) * r_outer)
+                    new_pts.append(new_pt)
+                else:
+                    new_pts.append(p)
+            else:
+                new_pts.append(p)
+                
+        return Polygon(new_pts, poly.interiors)
+
+    @staticmethod
     def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None, override_warning_poly=None, entity_meta=None):
         try:
             # 1. Geometry Prep
@@ -248,8 +300,11 @@ class SafetyMath:
                 final = override_poly
             else:
                 sw_union = unary_union(sweeps)
-                if abs(v) < 1e-3 and abs(ang_vel) > 1e-3 and P.get('patch_notch', False):
-                    sw_union = SafetyMath.patch_notch(sw_union)
+                if P.get('patch_notch', False) and abs(ang_vel) > 1e-3:
+                    if abs(v) < 1e-3:
+                        sw_union = SafetyMath.patch_notch(sw_union)
+                    else:
+                        sw_union = SafetyMath.patch_turning_notch(sw_union, v, ang_vel)
                 # field_method controls the post-sweep output shape:
                 # 'union'  -> standard union of all sweep instances
                 # 'hull'   -> convex hull of the sweep union
@@ -288,8 +343,11 @@ class SafetyMath:
                         poly_instance = translate(rotate(sweep_base, rot_deg, origin=(0,0)), cx, cy)
                         warn_sweeps.append(poly_instance)
                     warning_base = unary_union(warn_sweeps)
-                    if abs(v) < 1e-3 and abs(ang_vel) > 1e-3 and P.get('patch_notch', False):
-                        warning_base = SafetyMath.patch_notch(warning_base)
+                    if P.get('patch_notch', False) and abs(ang_vel) > 1e-3:
+                        if abs(v) < 1e-3:
+                            warning_base = SafetyMath.patch_notch(warning_base)
+                        else:
+                            warning_base = SafetyMath.patch_turning_notch(warning_base, v, ang_vel)
                     if field_method == 'hull':
                         warning_base = warning_base.convex_hull
                     elif field_method == 'hybrid' and D_warn < float(P.get('hull_threshold', 0.5)):
