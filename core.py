@@ -560,7 +560,6 @@ class SafetyMath:
                 if warning_base: warning_final = warning_base.difference(load_poly)
             
             # Geometric warning is now computed before the lidar loop
-                
             if final and not final.is_empty:
                 # Support MultiPolygons (multiple disconnected field parts)
                 if final.geom_type in ('MultiPolygon', 'GeometryCollection'):
@@ -572,6 +571,19 @@ class SafetyMath:
                 # Cleanup rings (discard holes if explicitly not wanted, but normally we keep them)
                 if final.geom_type == 'Polygon':
                     final = Polygon(final.exterior.coords, final.interiors)
+                final = SafetyMath.prune_collinear_points(final)
+
+            if warning_final and not warning_final.is_empty:
+                # Support MultiPolygons (multiple disconnected field parts)
+                if warning_final.geom_type in ('MultiPolygon', 'GeometryCollection'):
+                    polys = [g for g in getattr(warning_final, 'geoms', []) if g.geom_type == 'Polygon']
+                    if polys: 
+                        warning_final = unary_union(polys)
+                
+                # Cleanup rings
+                if warning_final.geom_type == 'Polygon':
+                    warning_final = Polygon(warning_final.exterior.coords, warning_final.interiors)
+                warning_final = SafetyMath.prune_collinear_points(warning_final)
             
             front_traj = []
             for i in range(len(traj)):
