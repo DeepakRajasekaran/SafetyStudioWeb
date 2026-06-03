@@ -257,7 +257,39 @@ class SafetyMath:
             else:
                 new_pts.append(p)
                 
-        return Polygon(new_pts, poly.interiors)
+        poly = Polygon(new_pts, poly.interiors)
+
+        # Local convexification of the outer boundary to bridge any remaining flat chords
+        pts = list(poly.exterior.coords)
+        if pts[0] == pts[-1]: pts.pop()
+        
+        changed = True
+        loops = 0
+        while changed and len(pts) > 3 and loops < 10:
+            changed = False
+            loops += 1
+            n = len(pts)
+            dists = [math.hypot(p[0] - x_icr, p[1] - y_icr) for p in pts]
+            if not dists: break
+            max_r = max(dists)
+            min_r = min(dists)
+            mid_r = (max_r + min_r) / 2.0
+            
+            keep_indices = []
+            for i in range(n):
+                p_prev = pts[(i-1)%n]; p_curr = pts[i]; p_next = pts[(i+1)%n]
+                cp = (p_curr[0]-p_prev[0])*(p_next[1]-p_curr[1]) - (p_curr[1]-p_prev[1])*(p_next[0]-p_curr[0])
+                # Only convexify points that belong to the outer half of the sweep
+                is_outer = dists[i] > mid_r
+                if is_outer and cp < -1e-4:
+                    changed = True
+                else:
+                    keep_indices.append(i)
+            if changed:
+                pts = [pts[idx] for idx in keep_indices]
+                
+        if len(pts) < 3: return poly
+        return Polygon(pts, poly.interiors)
 
     @staticmethod
     def calc_case(footprint, load_poly, sensors, v, w_input, P, override_poly=None, override_warning_poly=None, entity_meta=None):
@@ -349,7 +381,13 @@ class SafetyMath:
                 final = override_poly
             else:
                 sw_union = unary_union(sweeps)
-                if P.get('patch_notch', False) and abs(ang_vel) > 1e-3:
+                
+                will_use_hull = (field_method == 'hull') or (field_method == 'hybrid' and D < float(P.get('hull_threshold', 0.5)))
+                is_base_hull = P.get('use_hull_polygon', False)
+                
+                patch_applied = False
+                if P.get('patch_notch', False) and abs(ang_vel) > 1e-3 and not will_use_hull:
+                    patch_applied = True
                     if abs(v) < 1e-3:
                         sw_union = SafetyMath.patch_notch(sw_union)
                     else:
@@ -394,7 +432,13 @@ class SafetyMath:
                         poly_instance = translate(rotate(sweep_base, rot_deg, origin=(0,0)), cx, cy)
                         warn_sweeps.append(poly_instance)
                     warning_base = unary_union(warn_sweeps)
-                    if P.get('patch_notch', False) and abs(ang_vel) > 1e-3:
+                    
+                    warn_will_use_hull = (field_method == 'hull') or (field_method == 'hybrid' and D_warn < float(P.get('hull_threshold', 0.5)))
+                    is_base_hull = P.get('use_hull_polygon', False)
+                    
+                    warn_patch_applied = False
+                    if P.get('patch_notch', False) and abs(ang_vel) > 1e-3 and not warn_will_use_hull:
+                        warn_patch_applied = True
                         if abs(v) < 1e-3:
                             warning_base = SafetyMath.patch_notch(warning_base)
                         else:
@@ -545,8 +589,15 @@ class SafetyMath:
                 pt_global = translate(rotate(Point(ref_pt), rot_deg, origin=(0,0)), cx, cy)
                 front_traj.append((pt_global.x, pt_global.y))
             
-            return final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union, warning_final
+            generation_meta = {
+                "field_method_used": "hull" if will_use_hull else "union",
+                "patched": patch_applied if 'patch_applied' in locals() else False,
+                "warn_field_method_used": "hull" if ('warn_will_use_hull' in locals() and warn_will_use_hull) else "union",
+                "warn_patched": warn_patch_applied if 'warn_patch_applied' in locals() else False,
+                "base_was_hull": is_base_hull if 'is_base_hull' in locals() else False
+            }
+            return final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union, warning_final, generation_meta
         except Exception as e:
             import traceback
             traceback.print_exc()
-            return None, [], [], [], 0.0, [], None, None, None
+            return None, [], [], [], 0.0, [], None, None, None, {}

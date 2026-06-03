@@ -89,7 +89,7 @@ def calculate_case():
         print(f"DEBUG: Processing {load_key} case with P: {P} | Custom: {bool(override_poly)} | Warn Custom: {bool(override_warning_poly)}")
         
         entity_meta = data.get('entity_meta', {})
-        final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union, warning_final = SafetyMath.calc_case(
+        final, lid_out, traj, sweeps, D, front_traj, ignored_poly, sw_union, warning_final, generation_meta = SafetyMath.calc_case(
             footprint, load_poly, sensors, v, w_input, P, override_poly=override_poly, override_warning_poly=override_warning_poly, entity_meta=entity_meta
         )
 
@@ -130,7 +130,8 @@ def calculate_case():
             "dist_d": D,
             "ignored_wkt": ignored_wkt,
             "load": load_key,
-            "load_wkt": load_wkt_ret
+            "load_wkt": load_wkt_ret,
+            "generation_meta": generation_meta
         })
     except Exception as e:
         import traceback

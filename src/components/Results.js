@@ -564,7 +564,15 @@ const Results = ({ globals }) => {
 
   useEffect(() => {
     if (!currentResult) { setInspectorText('No result yet.'); return; }
-    let txt = `Status: CALCULATED\nSafety Dist (D): ${currentResult.dist_d?.toFixed(3)} m\n\n`;
+    let txt = `Status: CALCULATED\nSafety Dist (D): ${currentResult.dist_d?.toFixed(3)} m\n`;
+    if (currentResult.generation_meta) {
+      const meta = currentResult.generation_meta;
+      txt += `Base Polygon: ${meta.base_was_hull ? 'Convex Hull' : 'Footprint'}\n`;
+      txt += `Protective Method: ${meta.field_method_used.toUpperCase()} ${meta.patched ? '(Patched)' : ''}\n`;
+      txt += `Warning Method: ${meta.warn_field_method_used.toUpperCase()} ${meta.warn_patched ? '(Patched)' : ''}\n\n`;
+    } else {
+      txt += `\n`;
+    }
     
     if (viewMode === 'LiDAR View' && activeLidar) {
       txt += `--- ${activeLidar.name} ---\n`;
